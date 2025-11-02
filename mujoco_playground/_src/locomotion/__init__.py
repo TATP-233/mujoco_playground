@@ -28,6 +28,8 @@ from mujoco_playground._src.locomotion.berkeley_humanoid import joystick as berk
 from mujoco_playground._src.locomotion.berkeley_humanoid import randomize as berkeley_humanoid_randomize
 from mujoco_playground._src.locomotion.tron_a1 import joystick as tron_a1_sf_joystick
 from mujoco_playground._src.locomotion.tron_a1 import randomize as tron_a1_sf_randomize
+from mujoco_playground._src.locomotion.tita import joystick as tita_joystick
+from mujoco_playground._src.locomotion.tita import randomize as tita_randomize
 from mujoco_playground._src.locomotion.g1 import joystick as g1_joystick
 from mujoco_playground._src.locomotion.g1 import randomize as g1_randomize
 from mujoco_playground._src.locomotion.go1 import getup as go1_getup
@@ -59,6 +61,9 @@ _envs = {
     ),
     "TronA1SFJoystickFlatTerrain": functools.partial(
         tron_a1_sf_joystick.Joystick, task="flat_terrain"
+    ),
+    "TitaJoystickFlatTerrain": functools.partial(
+        tita_joystick.Joystick, task="flat_terrain"
     ),
     "G1JoystickFlatTerrain": functools.partial(
         g1_joystick.Joystick, task="flat_terrain"
@@ -111,6 +116,9 @@ _cfgs = {
     "TronA1SFJoystickFlatTerrain": (
         tron_a1_sf_joystick.default_config
     ),
+    "TitaJoystickFlatTerrain": (
+        tita_joystick.default_config
+    ),
     "G1JoystickFlatTerrain": g1_joystick.default_config,
     "G1JoystickRoughTerrain": g1_joystick.default_config,
     "Go1JoystickFlatTerrain": go1_joystick.default_config,
@@ -139,6 +147,9 @@ _randomizer = {
     ),
     "TronA1SFJoystickFlatTerrain": (
         tron_a1_sf_randomize.domain_randomize
+    ),
+    "TitaJoystickFlatTerrain": (
+        tita_randomize.domain_randomize
     ),
     "G1JoystickFlatTerrain": g1_randomize.domain_randomize,
     "G1JoystickRoughTerrain": g1_randomize.domain_randomize,
