@@ -181,7 +181,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     box_pos = data.xpos[self._obj_body]
     out_of_bounds = jp.any(jp.abs(box_pos) > 1.0)
     out_of_bounds |= box_pos[2] < 0.0
-    done = out_of_bounds | jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
+    done = out_of_bounds | jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any() | raw_rewards["reach_target"]
     done = done.astype(float)
 
     state.metrics.update(
@@ -202,6 +202,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     target_mat = math.quat_to_mat(data.mocap_quat[self._mocap_target])
     rot_err = jp.linalg.norm(target_mat.ravel()[:6] - box_mat.ravel()[:6])
 
+    reach_target = pos_err < 0.01
     box_target = 1 - jp.tanh(5 * (0.9 * pos_err + 0.1 * rot_err))
     gripper_box = 1 - jp.tanh(5 * jp.linalg.norm(box_pos - gripper_pos))
     robot_target_qpos = 1 - jp.tanh(
@@ -229,6 +230,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         "box_target": box_target * info["reached_box"],
         "no_floor_collision": no_floor_collision,
         "robot_target_qpos": robot_target_qpos,
+        "reach_target": reach_target,
     }
     return rewards
 
