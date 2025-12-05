@@ -80,7 +80,7 @@ class AirbotPlayPick(airbot_play.AirbotPlayBase):
         self._mj_model.jnt_qposadr[self._mj_model.joint(j).id]
         for j in all_joints
     ])
-    self._gripper_site = self._mj_model.site("gripper").id
+    self._gripper_site = self._mj_model.site("endpoint").id
     self._left_finger_geom = self._mj_model.geom("left_finger_pad").id
     self._right_finger_geom = self._mj_model.geom("right_finger_pad").id
     self._hand_geom = self._mj_model.geom("hand_box").id

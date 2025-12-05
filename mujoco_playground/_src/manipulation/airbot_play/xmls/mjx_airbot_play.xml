@@ -103,7 +103,7 @@
                   <geom name="hand_box" type="box" pos="0 0 -0.07" size="0.025 0.08 0.015" rgba="1 0 0 1" class="collision"/>
                   <geom type="mesh" material="Paint_Matte_Black" mesh="link6" class="visual"/>
                   <geom type="mesh" material="Paint_Matte_Black" mesh="camera_stand" class="visual"/>
-                  <site name="endpoint" pos='0 0 0.015' euler="0 -1.5708 0"/>
+                  <site name="endpoint" pos='0 0 0.015' euler="0 0 1.5708"/>
                   <body name="left">
                     <inertial pos="0 0.018307 -0.012505" quat="0.95 0.1 0 0" mass="0.027004" diaginertia="2.55732e-05 2.9e-05 1.12468e-05"/>
                     <joint name="endleft" class='finger2'/>
