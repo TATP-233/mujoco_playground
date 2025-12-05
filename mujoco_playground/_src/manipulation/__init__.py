@@ -29,6 +29,7 @@ from mujoco_playground._src.manipulation.franka_emika_panda_robotiq import push_
 from mujoco_playground._src.manipulation.leap_hand import reorient as leap_cube_reorient
 from mujoco_playground._src.manipulation.leap_hand import rotate_z as leap_rotate_z
 from mujoco_playground._src.manipulation.aero_hand import rotate_z as aero_hand_rotate_z
+from mujoco_playground._src.manipulation.airbot_play import pick as airbot_pick
 
 _envs = {
     "AlohaHandOver": aloha_handover.HandOver,
@@ -41,6 +42,7 @@ _envs = {
     "LeapCubeReorient": leap_cube_reorient.CubeReorient,
     "LeapCubeRotateZAxis": leap_rotate_z.CubeRotateZAxis,
     "AeroCubeRotateZAxis": aero_hand_rotate_z.CubeRotateZAxis,
+    "AirbotPlayPick": airbot_pick.AirbotPlayPick,
 }
 
 _cfgs = {
@@ -54,6 +56,7 @@ _cfgs = {
     "LeapCubeReorient": leap_cube_reorient.default_config,
     "LeapCubeRotateZAxis": leap_rotate_z.default_config,
     "AeroCubeRotateZAxis": aero_hand_rotate_z.default_config,
+    "AirbotPlayPick": airbot_pick.default_config,
 }
 
 _randomizer = {
