@@ -64,6 +64,18 @@ def brax_ppo_config(
     rl_config.num_envs = 1024
     rl_config.batch_size = 512
     rl_config.network_factory.policy_hidden_layer_sizes = (256, 256, 256, 256)
+  elif env_name.startswith("AirbotPlayPick"):
+    rl_config.num_timesteps = 20_000_000
+    rl_config.num_evals = 4
+    rl_config.unroll_length = 10
+    rl_config.num_minibatches = 32
+    rl_config.num_updates_per_batch = 8
+    rl_config.discounting = 0.97
+    rl_config.learning_rate = 1e-3
+    rl_config.entropy_cost = 2e-2
+    rl_config.num_envs = 2048
+    rl_config.batch_size = 512
+    rl_config.network_factory.policy_hidden_layer_sizes = (32, 32, 32, 32)
   elif env_name == "PandaOpenCabinet":
     rl_config.num_timesteps = 40_000_000
     rl_config.num_evals = 4

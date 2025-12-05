@@ -42,7 +42,7 @@ _envs = {
     "LeapCubeReorient": leap_cube_reorient.CubeReorient,
     "LeapCubeRotateZAxis": leap_rotate_z.CubeRotateZAxis,
     "AeroCubeRotateZAxis": aero_hand_rotate_z.CubeRotateZAxis,
-    "AirbotPlayPick": airbot_pick.AirbotPlayPick,
+    "AirbotPlayPickCube": airbot_pick.AirbotPlayPickCube,
 }
 
 _cfgs = {
@@ -56,7 +56,7 @@ _cfgs = {
     "LeapCubeReorient": leap_cube_reorient.default_config,
     "LeapCubeRotateZAxis": leap_rotate_z.default_config,
     "AeroCubeRotateZAxis": aero_hand_rotate_z.default_config,
-    "AirbotPlayPick": airbot_pick.default_config,
+    "AirbotPlayPickCube": airbot_pick.default_config,
 }
 
 _randomizer = {

@@ -40,7 +40,7 @@ def default_config() -> config_dict.ConfigDict:
   return config
 
 
-class AirbotPlayPick(airbot_play.AirbotPlayBase):
+class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
   """Bring a box to a target."""
 
   def __init__(
