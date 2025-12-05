@@ -9,25 +9,25 @@
       <default class="collision">
         <geom group="3" condim="3" solimp="0.99 0.995 0.01" solref="0.01 1" friction="1 0.005 0.0001"/>
       </default>
-      <joint axis='0 0 1' frictionloss="12"/>
-      <position ctrllimited="true" inheritrange="1" forcelimited="true"/>
+      <joint armature="0.1" axis='0 0 1' frictionloss="12"/>
+      <position ctrllimited="true" inheritrange="1"/>
       <default class='joint1'>
-        <joint range="-3.151 2.089" actuatorfrcrange="-30 30" damping="2"/>
+        <joint range="-3.151 2.089" actuatorfrcrange="-24 24" damping="2"/>
       </default>
       <default class='joint2'>
-        <joint range="-2.963 0.181" actuatorfrcrange="-30 30" damping="2"/>
+        <joint range="-2.963 0.181" actuatorfrcrange="-24 24" damping="2"/>
       </default>
       <default class='joint3'>
-        <joint range='-0.094 3.161' actuatorfrcrange="-30 30" damping="2"/>
+        <joint range='-0.094 3.161' actuatorfrcrange="-24 24" damping="2"/>
       </default>
       <default class='joint4'>
-        <joint range="-3.012 3.012" actuatorfrcrange="-16 16" damping="1"/>
+        <joint range="-3.012 4.711" actuatorfrcrange="-8 8" damping="1" frictionloss="3"/>
       </default>
       <default class='joint5'>
-        <joint range="-1.859 1.859" actuatorfrcrange="-16 16" damping="1"/>
+        <joint range="-1.859 1.859" actuatorfrcrange="-8 8" damping="1" frictionloss="3"/>
       </default>
       <default class='joint6'>
-        <joint range="-3.017 3.017" actuatorfrcrange="-16 16" damping="1"/>
+        <joint range="-4.711 3.017" actuatorfrcrange="-8 8" damping="1" frictionloss="3"/>
       </default>
       <default class='finger1'>
         <joint axis='0 1 0' range="-0.04 0" type='slide' actuatorfrcrange="-5 5" damping="0.5" frictionloss="0.1"/>
@@ -171,13 +171,13 @@
   </sensor>
 
   <actuator>
-    <position name="joint1" ctrlrange="-3.151 2.089"  joint="joint1" kp="850" kv="2"/>
-    <position name="joint2" ctrlrange="-2.963 0.181"  joint="joint2" kp="850" kv="2"/>
-    <position name="joint3" ctrlrange="-0.094 3.161" joint="joint3" kp="850" kv="2"/>
-    <position name="joint4" ctrlrange="-3.012 3.012"  joint="joint4" kp="350" kv="1"/>
-    <position name="joint5" ctrlrange="-1.859 1.859"  joint="joint5" kp="350" kv="1"/>
-    <position name="joint6" ctrlrange="-3.017 3.017"  joint="joint6" kp="350" kv="1"/>
-    <position name='gripper' tendon='gripper_gear' ctrlrange="0. 0.04" kp="85" kv="1"/>
+    <position name="joint1" class='joint1' joint="joint1" kp="150" kv="2"/>
+    <position name="joint2" class='joint2' joint="joint2" kp="350" kv="2"/>
+    <position name="joint3" class='joint3' joint="joint3" kp="350" kv="2"/>
+    <position name="joint4" class='joint4' joint="joint4" kp="175" kv="1"/>
+    <position name="joint5" class='joint5' joint="joint5" kp="175" kv="1"/>
+    <position name="joint6" class='joint6' joint="joint6" kp="175" kv="1"/>
+    <position name='gripper' tendon='gripper_gear' ctrlrange="0. 0.04" kp="105" kv="1"/>
   </actuator>
 
 </mujoco>
