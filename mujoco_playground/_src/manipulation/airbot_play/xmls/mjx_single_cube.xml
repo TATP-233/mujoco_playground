@@ -14,10 +14,10 @@
 
   <include file="sensor.xml"/>
 
-  <contact>
+  <!-- <contact>
     <exclude body1="left" body2="ground"/>
     <exclude body1="right" body2="ground"/>
-  </contact>
+  </contact> -->
 
   <keyframe>
     <key name="home"

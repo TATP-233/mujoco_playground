@@ -10,7 +10,7 @@
         <geom group="3" condim="3" solimp="0.99 0.995 0.01" solref="0.01 1" friction="1 0.005 0.0001"/>
       </default>
       <joint armature="0.1" axis='0 0 1' frictionloss="12"/>
-      <position ctrllimited="true" inheritrange="1"/>
+      <position ctrllimited="true" inheritrange="1" forcerange="-24 24"/>
       <default class='joint1'>
         <joint range="-3.151 2.089" actuatorfrcrange="-24 24" damping="2"/>
       </default>
