@@ -2,6 +2,7 @@
   <include file="mjx_scene.xml"/>
 
   <worldbody>
+    <camera name="side" pos="-0.104 0.637 0.225" xyaxes="-0.950 -0.314 0.000 0.032 -0.097 0.995"/>
     <body name="box" pos="0.25 0 0.02">
       <freejoint/>
       <geom type="box" name="box" size="0.015 0.015 0.02" condim="3" friction="1 .03 .003" rgba="0 1 0 1" contype="2" conaffinity="1" solref="0.01 1"/>
