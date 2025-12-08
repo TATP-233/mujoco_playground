@@ -223,8 +223,8 @@ class PandaPickCube(panda.PandaBase):
     gripper_mat = data.site_xmat[self._gripper_site].ravel()
     target_mat = math.quat_to_mat(data.mocap_quat[self._mocap_target])
     obs = jp.concatenate([
-        data.qpos,
-        data.qvel,
+        data.qpos[self._robot_qposadr],
+        data.qvel[self._robot_qposadr],
         gripper_pos,
         gripper_mat[3:],
         data.xmat[self._obj_body].ravel()[3:],
