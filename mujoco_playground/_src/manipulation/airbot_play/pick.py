@@ -26,11 +26,11 @@ def default_config() -> config_dict.ConfigDict:
               # Gripper goes to the box.
               gripper_box=4.0,
               # Box goes to the target mocap.
-              box_target=8.0,
+              box_target=30.0,
               # Do not collide the gripper with the floor.
               no_floor_collision=0.25,
               # Arm stays close to target pose.
-              robot_target_qpos=0.3,
+              robot_target_qpos=0.1,
           )
       ),
       impl='jax',
