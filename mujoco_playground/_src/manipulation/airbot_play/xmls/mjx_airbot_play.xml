@@ -29,11 +29,11 @@
       <default class='joint6'>
         <joint range="-4.711 3.017" actuatorfrcrange="-8 8" damping="1" frictionloss="3"/>
       </default>
-      <default class='finger1'>
-        <joint axis='0 1 0' range="-0.04 0" type='slide' actuatorfrcrange="-5 5" damping="0.5" frictionloss="0.1"/>
-      </default>
-      <default class='finger2'>
+      <default class='finger_left'>
         <joint axis='0 1 0' range="0 0.04" type='slide' actuatorfrcrange="-5 5" damping="0.5" frictionloss="0.1"/>
+      </default>
+      <default class='finger_right'>
+        <joint axis='0 -1 0' range="0 0.04" type='slide' actuatorfrcrange="-5 5" damping="0.5" frictionloss="0.1"/>
       </default>
     </default>
     <site size="0.001" group="3"/>
@@ -106,14 +106,14 @@
                   <site name="endpoint" pos='0 0 0.015' euler="0 0 1.5708"/>
                   <body name="left">
                     <inertial pos="0 0.018307 -0.012505" quat="0.95 0.1 0 0" mass="0.027004" diaginertia="2.55732e-05 2.9e-05 1.12468e-05"/>
-                    <joint name="endleft" class='finger2'/>
+                    <joint name="endleft" class='finger_left'/>
                     <geom type="mesh" mesh="right" material="Paint_Matte_Black" class="visual"/>
                     <geom name="left_finger_pad" type="box" size=".00625 .005 .019" pos="0 0.005 0.005" rgba="1 0 0 1" class="collision"/>
                     <geom type="box" size=".015 .005 .018" pos="0 0.005 -0.032" rgba="1 0 0 1" class="collision"/>
                   </body>
                   <body name="right">
                     <inertial pos="0 -0.018307 -0.012505" quat="0.95 -0.1 0 0" mass="0.027004" diaginertia="2.550732e-05 2.9e-05 1.124468e-05"/>
-                    <joint name="endright" class='finger1'/>
+                    <joint name="endright" class='finger_right'/>
                     <geom type="mesh" mesh="left" material="Paint_Matte_Black" class="visual"/>
                     <geom name="right_finger_pad" type="box" size=".00625 .005 .019" pos="0 -0.005 0.005" rgba="1 0 0 1" class="collision"/>
                     <geom type="box" size=".015 .005 .018" pos="0 -0.005 -0.032" rgba="1 0 0 1" class="collision"/>
@@ -130,12 +130,12 @@
   <tendon>
     <fixed name='gripper_gear'>
       <joint joint='endleft'  coef='0.5'/>
-      <joint joint='endright' coef='-0.5'/>
+      <joint joint='endright' coef='0.5'/>
     </fixed>
   </tendon>
 
   <equality>
-    <joint joint1='endleft' joint2='endright' polycoef='0 -1 0 0 0 '/>
+    <joint joint1='endleft' joint2='endright' polycoef='0 1 0 0 0 '/>
   </equality>
 
   <sensor>

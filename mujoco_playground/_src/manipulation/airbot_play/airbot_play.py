@@ -17,7 +17,7 @@ _ARM_JOINTS = [
     "joint5",
     "joint6",
 ]
-_FINGER_JOINTS = ["endright", "endleft"]
+_FINGER_JOINTS = ["endleft", "endright"]
 
 
 def default_config() -> config_dict.ConfigDict:
