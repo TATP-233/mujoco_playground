@@ -1,7 +1,7 @@
 """Convert trained brax PPO model to ONNX format using PyTorch."""
 
 import os
-# os.environ["MUJOCO_GL"] = "egl"
+os.environ["MUJOCO_GL"] = "egl"
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
 import functools
