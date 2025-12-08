@@ -1,7 +1,7 @@
 """Convert trained brax PPO model to ONNX format using PyTorch."""
 
 import os
-os.environ["MUJOCO_GL"] = "egl"
+# os.environ["MUJOCO_GL"] = "egl"
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
 import functools
@@ -19,6 +19,7 @@ from etils import epath
 
 from mujoco_playground import registry
 from mujoco_playground.config import locomotion_params
+from mujoco_playground.config import manipulation_params
 
 import argparse
 
@@ -149,8 +150,11 @@ def main():
     print(f"Action size: {act_size}")
     
     # Load PPO parameters
-    ppo_params = locomotion_params.brax_ppo_config(ENV_NAME, "jax")
-    
+    try:
+        ppo_params = locomotion_params.brax_ppo_config(ENV_NAME, "jax")
+    except ValueError:
+        ppo_params = manipulation_params.brax_ppo_config(ENV_NAME, "jax")
+   
     # Create network factory
     network_factory = functools.partial(
         ppo_networks.make_ppo_networks,
@@ -172,14 +176,21 @@ def main():
     inference_fn = make_inference_fn(params, deterministic=True)
     
     # Extract normalization parameters
-    mean = np.array(params[0].mean["state"])
-    std = np.array(params[0].std["state"])
+    if isinstance(obs_size, int):
+        obs_dim = obs_size
+        mean = np.array(params[0].mean)
+        std = np.array(params[0].std)
+    else:
+        obs_dim = obs_size["state"][0]
+        mean = np.array(params[0].mean["state"])
+        std = np.array(params[0].std["state"])
+
     print(f"Normalization params - mean shape: {mean.shape}, std shape: {std.shape}")
     
     # Create PyTorch model
     print("Creating PyTorch model...")
     pytorch_model = PolicyNetwork(
-        obs_dim=obs_size["state"][0],
+        obs_dim=obs_dim,
         action_dim=act_size,
         hidden_sizes=ppo_params.network_factory.policy_hidden_layer_sizes,
         mean=mean,
@@ -192,16 +203,19 @@ def main():
     transfer_weights_from_jax(params[1]['params'], pytorch_model)
     
     # Test PyTorch model
-    test_obs = torch.ones(obs_size["state"][0], dtype=torch.float32)
+    test_obs = torch.ones(obs_dim, dtype=torch.float32)
     with torch.no_grad():
         pytorch_pred = pytorch_model(test_obs)
     print(f"PyTorch prediction sample: {pytorch_pred[:5]}")
     
     # Test JAX model for comparison
-    test_input_jax = {
-        'state': jp.ones(obs_size["state"]),
-        'privileged_state': jp.zeros(obs_size["privileged_state"])
-    }
+    if isinstance(obs_size, int):
+        test_input_jax = jp.ones(obs_size)
+    else:
+        test_input_jax = {
+            'state': jp.ones(obs_size["state"]),
+            'privileged_state': jp.zeros(obs_size["privileged_state"])
+        }
     jax_pred, _ = inference_fn(test_input_jax, jax.random.PRNGKey(0))
     print(f"JAX prediction sample: {jax_pred[:5]}")
     
@@ -217,7 +231,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Create dummy input for ONNX export (batch size = 1)
-    dummy_input = torch.ones(1, obs_size["state"][0], dtype=torch.float32)
+    dummy_input = torch.ones(1, obs_dim, dtype=torch.float32)
     
     # Export to ONNX
     # Note: Setting dynamo=False to use legacy exporter which better supports
@@ -251,7 +265,7 @@ def main():
     print(f"ONNX output name: {output_name}")
     
     # Run inference
-    onnx_input = {input_name: np.ones((1, obs_size["state"][0]), dtype=np.float32)}
+    onnx_input = {input_name: np.ones((1, obs_dim), dtype=np.float32)}
     onnx_pred = session.run([output_name], onnx_input)[0][0]
     print(f"ONNX prediction sample: {onnx_pred[:5]}")
     
