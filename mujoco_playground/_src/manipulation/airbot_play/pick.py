@@ -184,6 +184,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     done = out_of_bounds | jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any() | jp.isnan(reward)
     done = done.astype(float)
 
+    reward = jp.where(jp.isnan(reward), -1e4, reward)
+
     state.metrics.update(
         **raw_rewards, out_of_bounds=out_of_bounds.astype(float)
     )
