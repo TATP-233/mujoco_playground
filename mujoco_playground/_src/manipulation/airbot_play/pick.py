@@ -154,6 +154,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         mocap_quat=data.mocap_quat.at[self._mocap_target, :].set(target_quat),
     )
 
+    data = mjx.forward(self._mjx_model, data)
+
     # initialize env state and info
     metrics = {
         "out_of_bounds": jp.array(0.0, dtype=float),
@@ -171,6 +173,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     ctrl = jp.clip(ctrl, self._lowers, self._uppers)
 
     data = mjx_env.step(self._mjx_model, state.data, ctrl, self.n_substeps)
+    data = mjx.forward(self._mjx_model, data)
 
     raw_rewards = self._get_reward(data, state.info)
     rewards = {
