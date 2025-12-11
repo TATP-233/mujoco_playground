@@ -30,6 +30,7 @@ from mujoco_playground._src.manipulation.leap_hand import reorient as leap_cube_
 from mujoco_playground._src.manipulation.leap_hand import rotate_z as leap_rotate_z
 from mujoco_playground._src.manipulation.aero_hand import rotate_z as aero_hand_rotate_z
 from mujoco_playground._src.manipulation.airbot_play import pick as airbot_pick
+from mujoco_playground._src.manipulation.universal_robots_ur5e_robotiq import pick as ur5e_pick
 
 _envs = {
     "AlohaHandOver": aloha_handover.HandOver,
@@ -43,6 +44,7 @@ _envs = {
     "LeapCubeRotateZAxis": leap_rotate_z.CubeRotateZAxis,
     "AeroCubeRotateZAxis": aero_hand_rotate_z.CubeRotateZAxis,
     "AirbotPlayPickCube": airbot_pick.AirbotPlayPickCube,
+    "Ur5ePickCube": ur5e_pick.Ur5ePickCube,
 }
 
 _cfgs = {
@@ -57,6 +59,7 @@ _cfgs = {
     "LeapCubeRotateZAxis": leap_rotate_z.default_config,
     "AeroCubeRotateZAxis": aero_hand_rotate_z.default_config,
     "AirbotPlayPickCube": airbot_pick.default_config,
+    "Ur5ePickCube": ur5e_pick.default_config,
 }
 
 _randomizer = {

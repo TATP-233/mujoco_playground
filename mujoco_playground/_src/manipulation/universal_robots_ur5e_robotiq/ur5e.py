@@ -1,110 +1,93 @@
-import os
+from typing import Any, Dict, Optional, Union
+
+from etils import epath
+import jax.numpy as jp
+from ml_collections import config_dict
 import mujoco
+from mujoco import mjx
 import numpy as np
-from scipy.spatial.transform import Rotation
 
-os.environ["DISCOVERSE_ASSETS_DIR"] = os.path.join(os.path.dirname(os.path.abspath(__file__)))
+from mujoco_playground._src import mjx_env
 
-from discoverse.envs import SimulatorBase
-from discoverse.utils.base_config import BaseConfig
+_ARM_JOINTS = [
+    "shoulder_pan_joint",
+    "shoulder_lift_joint",
+    "elbow_joint",
+    "wrist_1_joint",
+    "wrist_2_joint",
+    "wrist_3_joint",
+]
+_FINGER_JOINTS = ["left_driver_joint"]
 
-class Ur5eCfg(BaseConfig):
-    mjcf_file_path = "xmls/scene_ur5e_robotiq.xml"
-    decimation     = 4
-    timestep       = 0.005
-    sync           = True
-    headless       = False
-    render_set     = {
-        "fps"    : 30,
-        "width"  : 1280,
-        "height" : 720,
-    }
-    init_qpos = np.zeros(7)
-    obs_rgb_cam_id  = None
-    rb_link_list   = [
-        "base", "shoulder_link", "upper_arm_link", "forearm_link", "wrist_1_link", "wrist_2_link", "wrist_3_link",
-        "robotiq_base", "left_coupler", "left_spring_link", "left_follower", "right_driver", "right_coupler", "right_spring_link", "right_follower"
+
+def default_config() -> config_dict.ConfigDict:
+  return config_dict.create(
+      ctrl_dt=0.02,
+      sim_dt=0.005,
+      episode_length=150,
+      action_repeat=1,
+      action_scale=0.04,
+      impl='jax',
+      nconmax=12 * 8192,
+      njmax=44,
+  )
+
+class Ur5eRobotiqBase(mjx_env.MjxEnv):
+  def __init__(
+      self,
+      xml_path: epath.Path,
+      config: config_dict.ConfigDict,
+      config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
+  ):
+    super().__init__(config, config_overrides)
+
+    self._xml_path = xml_path.as_posix()
+    mj_model = mujoco.MjModel.from_xml_path(self._xml_path)
+    mj_model.opt.timestep = self.sim_dt
+
+    self._mj_model = mj_model
+    self._mjx_model = mjx.put_model(mj_model, impl=self._config.impl)
+    self._action_scale = config.action_scale
+
+  def _post_init(self, obj_name: str, keyframe: str):
+    all_joints = _ARM_JOINTS + _FINGER_JOINTS
+    self._robot_arm_qposadr = np.array([
+        self._mj_model.jnt_qposadr[self._mj_model.joint(j).id]
+        for j in _ARM_JOINTS
+    ])
+    self._robot_qposadr = np.array([
+        self._mj_model.jnt_qposadr[self._mj_model.joint(j).id]
+        for j in all_joints
+    ])
+    self._gripper_site = self._mj_model.site("gripper").id
+    self._left_finger_geom = self._mj_model.geom("left_finger_pad").id
+    self._right_finger_geom = self._mj_model.geom("right_finger_pad").id
+    self._obj_body = self._mj_model.body(obj_name).id
+    self._obj_qposadr = self._mj_model.jnt_qposadr[
+        self._mj_model.body(obj_name).jntadr[0]
     ]
-    obj_list       = []
-    use_gaussian_renderer = True
-    gs_model_dict = {
-        "base"           : "ur5e/base.ply",
-        "shoulder_link"  : "ur5e/shoulder_link.ply",
-        "upper_arm_link" : "ur5e/upper_arm_link.ply",
-        "forearm_link"   : "ur5e/forearm_link.ply",
-        "wrist_1_link"   : "ur5e/wrist_1_link.ply",
-        "wrist_2_link"   : "ur5e/wrist_2_link.ply",
-        "wrist_3_link"   : "ur5e/wrist_3_link.ply",
+    # self._mocap_target = self._mj_model.body("mocap_target").mocapid
+    self._floor_geom = self._mj_model.geom("floor").id
+    self._init_q = self._mj_model.keyframe(keyframe).qpos
+    self._init_obj_pos = jp.array(
+        self._init_q[self._obj_qposadr : self._obj_qposadr + 3],
+        dtype=jp.float32,
+    )
+    self._init_ctrl = self._mj_model.keyframe(keyframe).ctrl
+    self._lowers, self._uppers = self._mj_model.actuator_ctrlrange.T
 
-        "robotiq_base"      : "robotiq/robotiq_base.ply",
-        "left_driver"       : "robotiq/left_driver.ply",
-        "left_coupler"      : "robotiq/left_coupler.ply",
-        "left_spring_link"  : "robotiq/left_spring_link.ply",
-        "left_follower"     : "robotiq/left_follower.ply",
+  @property
+  def xml_path(self) -> str:
+    return self._xml_path
 
-        "right_driver"      : "robotiq/right_driver.ply",
-        "right_coupler"     : "robotiq/right_coupler.ply",
-        "right_spring_link" : "robotiq/right_spring_link.ply",
-        "right_follower"    : "robotiq/right_follower.ply",
-    }
+  @property
+  def action_size(self) -> int:
+    return self.mjx_model.nu
 
-class Ur5eBase(SimulatorBase):
-    def __init__(self, config: Ur5eCfg):
-        super().__init__(config)
+  @property
+  def mj_model(self) -> mujoco.MjModel:
+    return self._mj_model
 
-    def resetState(self):
-        mujoco.mj_resetData(self.mj_model, self.mj_data)
-        mujoco.mj_forward(self.mj_model, self.mj_data)
-        mujoco.mj_resetDataKeyframe(self.mj_model, self.mj_data, self.mj_model.key("home").id)
-
-    def updateControl(self, action):
-        self.mj_data.ctrl[:] = action[:self.mj_model.nu]
-
-    def checkTerminated(self):
-        return False
-
-    def getObservation(self):
-        return None
-
-    def getPrivilegedObservation(self):
-        return None
-
-    def getReward(self):
-        return None
-
-if __name__ == "__main__":
-    cfg = Ur5eCfg()
-    cfg.gs_model_dict["background"] = "ur5e_bg.ply"
-    exec_node = Ur5eBase(cfg)
-
-    exec_node.reset()
-    current_qpos = exec_node.mj_data.qpos[:7].copy()
-    qpos_lowers = np.clip(current_qpos - 0.3, exec_node.mj_model.actuator_ctrlrange[:, 0][:7], exec_node.mj_model.actuator_ctrlrange[:, 1][:7])
-    qpos_uppers = np.clip(current_qpos + 0.3, exec_node.mj_model.actuator_ctrlrange[:, 0][:7], exec_node.mj_model.actuator_ctrlrange[:, 1][:7])
-    qpos_lowers[-1] = 0.0
-    qpos_uppers[-1] = 0.82
-    qpos_lowers[:-1] = current_qpos[:-1]
-    qpos_uppers[:-1] = current_qpos[:-1]
-
-    while exec_node.running:
-        # Calculate target position based on time for periodic motion
-        t = exec_node.mj_data.time
-        period = 2.0  # Total period for one complete cycle
-        
-        # Determine phase: 0-0.33 (current->lower), 0.33-0.67 (lower->upper), 0.67-1.0 (upper->lower)
-        phase = (t % period) / period
-        
-        if phase < 0.33:
-            # current -> lower
-            alpha = phase / 0.33
-            target_qpos = current_qpos * (1 - alpha) + qpos_lowers * alpha
-        elif phase < 0.67:
-            # lower -> upper
-            alpha = (phase - 0.33) / 0.34
-            target_qpos = qpos_lowers * (1 - alpha) + qpos_uppers * alpha
-        else:
-            # upper -> lower
-            alpha = (phase - 0.67) / 0.33
-            target_qpos = qpos_uppers * (1 - alpha) + qpos_lowers * alpha
-        
-        exec_node.step(action=target_qpos)
+  @property
+  def mjx_model(self) -> mjx.Model:
+    return self._mjx_model

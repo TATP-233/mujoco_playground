@@ -160,7 +160,7 @@
                   <inertial mass="0.1889" pos="0 0.0771683 0" quat="1 0 0 1" diaginertia="0.000132134 9.90863e-05 9.90863e-05"/>
                   <joint name="wrist_3_joint" class="size1"/>
                   <geom material="linkgray" mesh="wrist3" class="visual"/>
-                  <geom class="eef_collision" pos="0 0.08 0" quat="1 1 0 0" size="0.04 0.02"/>
+                  <!-- <geom class="eef_collision" pos="0 0.08 0" quat="1 1 0 0" size="0.04 0.02"/> -->
                   <site name="attachment_site" pos="0 0.1 0" quat="-1 1 0 0"/>
                   <!-- <body name="robotiq_base" childclass="2f85" quat="1 0 0 -1" gravcomp="1"> -->
                   <body name="robotiq_base" childclass="2f85" pos="0 0.11 0" quat="1 -1 0 0" gravcomp="1">

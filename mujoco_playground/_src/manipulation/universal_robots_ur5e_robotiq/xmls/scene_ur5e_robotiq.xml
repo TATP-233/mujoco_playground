@@ -21,12 +21,12 @@
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
   </worldbody>
 
-  <keyframe>
+  <!-- <keyframe>
     <key
       name="home"
       qpos="0 -1.5708 -1.5708 -1.5708 1.5708 0 0 0 0 0 0 0"
       ctrl="0 -1.5708 -1.5708 -1.5708 1.5708 0 0"
     />
-  </keyframe>
+  </keyframe> -->
 
 </mujoco>
