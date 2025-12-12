@@ -1,4 +1,4 @@
-<mujoco model="panda scene with updated robotiq gripper">
+<mujoco model="panda with robotiq gripper">
   <compiler angle="radian" meshdir="assets" autolimits="true"/>
 
   <statistic center="0.3 0 0.4" extent="1"/>
@@ -59,6 +59,8 @@
   </default>
 
   <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0 0.5 1" rgb2="0 0.5 1" width="800" height="800"/>
+
     <material class="panda" name="white" rgba="1 1 1 1"/>
     <material class="panda" name="off_white" rgba="0.901961 0.921569 0.929412 1"/>
     <material class="panda" name="black" rgba="0.25 0.25 0.25 1"/>
@@ -139,13 +141,8 @@
     <mesh file="finger_0.obj"/>
     <mesh file="finger_1.obj"/>
 
-    <!-- Force Torque meshes -->
-    <mesh name="fts300_base_mesh" file="robotiq_fts300_base.stl" scale="0.001 0.001 0.001" />
-    <mesh name="fts300_top_mesh" file="robotiq_fts300_top.stl" scale="0.001 0.001 0.001" />
-    <mesh name="fts300_coupling_mesh" file="robotiq_fts300_coupling.stl" scale="0.001 0.001 0.001" />
-
     <!-- Gripper Meshes -->
-    <mesh file="base.stl"/>
+    <mesh name="robotiq_base" file="base.stl"/>
     <mesh file="base_coupling.stl"/>
     <mesh file="c-a01-85-open.stl"/>
     <mesh file="driver.stl"/>
@@ -156,7 +153,8 @@
   </asset>
 
   <worldbody>
-    <body name="link0" childclass="panda" gravcomp="1">
+    <!-- <body name="link0" childclass="panda" gravcomp="1" pos="-0.01 0 0.518" quat="0 0.005 -0.011 1"> -->
+    <body name="link0" childclass="panda" gravcomp="1" pos="-0.0089715 -0.00186572 0.516" quat="0.0157989 0.00645533 -0.00626437 0.99983473">
       <inertial mass="0.629769" pos="-0.041018 -0.00014 0.049974"
         fullinertia="0.00315 0.00388 0.004285 8.2904e-7 0.00015 8.2299e-6"/>
       <geom mesh="link0_0" material="off_white" class="visual"/>
@@ -246,92 +244,76 @@
                     <geom mesh="link7_6" material="black" class="visual"/>
                     <geom mesh="link7_7" material="white" class="visual"/>
                     <geom mesh="link7_c" class="collision"/>
-                    <body pos="0 0 0.107" name="panda_robotiq_fts300" gravcomp="1">
-                      <body name="base_mount" gravcomp="1">
-                        <geom name="fts300_coupling_geom" mesh="fts300_coupling_mesh" pos="0 0 -0.003" material="black" class="visual_gripper"/>
-                        <body name="fts300_body" pos="0 0 0.0415" gravcomp="1">
-                          <!-- Inertial values used below extracted from manufacturer's datasheet -->
-                          <inertial pos="0 0 -0.0205" mass="0.3" diaginertia="0.000262 0.000265 0.000219" />
-                          <geom name="fts300_geom" type="mesh" mesh="fts300_base_mesh" material="black" class="visual_gripper"/>
-                          <body name="fts300_sensor_body" gravcomp="1">
-                            <geom name="fts300_sensor_geom" type="mesh" mesh="fts300_top_mesh" material="black" class="visual_gripper"/>
-                            <!-- TODO(murilomartins): Frame of reference from manufacturer's datasheet appears to be misplaced; update sensor frame site once identified on the real sensor. -->
-                            <site name="ft_sensor_frame_site" pos="0 0 -0.02" />
-                            <site name="ft_sensor_attachment_site" />
-                            <body name="base" childclass="2f85" quat="1 0 0 -1" gravcomp="1">
-                              <inertial mass="0.777441" pos="0 -2.70394e-05 0.0354675" quat="1 -0.00152849 0 0"
-                                diaginertia="0.000260285 0.000225381 0.000152708"/>
-                              <geom class="visual_gripper" pos="0 0 0.0108" quat="0 0 0 1"   mesh="base"/>
-                              <geom class="visual_gripper" pos="0 0 0.004" quat="0.707107 -0.707107 0 0"   mesh="base_coupling"/>
-                              <geom class="visual_gripper" pos="0 0 0.0108" quat="1 0 0 0"  material="metal" mesh="c-a01-85-open"/>
-                              <!-- May have to update -->
-                              <site name="base_top_site" pos="0 0 0.088" />
-                              <site name="gripper" pos="0 0 0.1489" />
-                              <geom name="hand_capsule" class="collision_gripper" type="capsule" conaffinity="1" size="0.040000000000000001 0.06" rgba="1 1 1 0.29999999999999999" pos="0 0 0.01"/>
+                    <body name="robotiq_base" childclass="2f85" quat="1 0 0 -1" pos="0 0 0.11" gravcomp="1">
+                      <inertial mass="0.777441" pos="0 -2.70394e-05 0.0354675" quat="1 -0.00152849 0 0"
+                        diaginertia="0.000260285 0.000225381 0.000152708"/>
+                      <geom class="visual_gripper" pos="0 0 0.0108" quat="0 0 0 1" mesh="robotiq_base"/>
+                      <geom class="visual_gripper" pos="0 0 0.004" quat="0.707107 -0.707107 0 0"   mesh="base_coupling"/>
+                      <geom class="visual_gripper" pos="0 0 0.0108" quat="1 0 0 0"  material="metal" mesh="c-a01-85-open"/>
+                      <!-- May have to update -->
+                      <site name="base_top_site" pos="0 0 0.088" />
+                      <site name="gripper" pos="0 0 0.1489" />
+                      <geom name="hand_capsule" class="collision_gripper" type="capsule" conaffinity="1" size="0.040000000000000001 0.06" rgba="1 1 1 0.29999999999999999" pos="0 0 0.01"/>
 
-                              <!-- Left-hand side 4-bar linkage -->
-                              <body name="left_driver" pos="-0.0306011 0.00475 0.0657045" quat="0.707107 -0.707107 0 0" gravcomp="1">
-                                <inertial mass="0.00899563" pos="0 0.0177547 0.00107314" quat="0.681301 0.732003 0 0"
-                                    diaginertia="1.72352e-06 1.60906e-06 3.22006e-07"/>
-                                <joint name="left_driver_joint" class="driver"/>
-                                <geom class="visual_gripper" pos="0.0306011 0.0549045 -0.0047" quat="0.707107 0.707107 0 0"  material="metal" mesh="driver"/>
-                                <body name="left_coupler" pos="-0.0314249 0.00453223 -0.0102" quat="8.02038e-06 0 0 1" gravcomp="1">
-                                  <inertial mass="0.0140974" pos="0 0.00301209 0.0232175" quat="0.705636 -0.0455904 0.0455904 0.705636"
-                                  diaginertia="4.16206e-06 3.52216e-06 8.88131e-07"/>
-                                  <geom class="visual_gripper" pos="-0.062026 -0.0503723 0.0055" quat="0.707107 -0.707107 0 0"   mesh="coupler"/>
-                                  <geom name="left_coupler_col_1" class="pad_box2" pos="0.005 0.025 0.01" quat="1 1 -0.1 0" type="capsule" size="0.009 0.02"/>
-                                  <geom name="left_coupler_col_2" class="pad_box2" pos="0.005 0.025 0.001" quat="1 1 -0.1 0" type="capsule" size="0.009 0.02"/>
-                                </body>
-                              </body>
-                              <body name="left_spring_link" pos="-0.0127 -0.012 0.07222" quat="0.707107 -0.707107 -4.97726e-06 -4.97726e-06" gravcomp="1">
-                                <inertial mass="0.0221642" pos="-8.65005e-09 0.0181624 0.0212658" quat="0.663403 -0.244737 0.244737 0.663403"
-                                    diaginertia="8.96853e-06 6.71733e-06 2.63931e-06"/>
-                                <joint name="left_spring_link_joint" class="spring_link"/>
-                                <geom class="visual_gripper" pos="0.0127 0.06142 0.01205" quat="0.707107 0.707107 0 0" type="mesh"  mesh="spring_link"/>
-                                <body name="left_follower" pos="-0.0382079 -0.0425003 0.00295" quat="0 -1 -1.90231e-05 0" gravcomp="1">
-                                  <inertial mass="0.0125222" pos="0 -0.011046 0.0124786" quat="1 0.1664 0 0"
-                                  diaginertia="2.67415e-06 2.4559e-06 6.02031e-07"/>
-                                  <joint name="left_follower" class="follower"/>
-                                  <geom class="visual_gripper" pos="0.0509079 -0.10392 -0.0091" quat="0.707107 -0.707107 0 0" type="mesh"  mesh="follower"/>
-                                  <geom class="visual_gripper" pos="0.0509079 -0.10392 -0.0091" quat="0.707107 -0.707107 0 0" type="mesh" material="metal" mesh="tongue"/>
-                                  <geom name="left_follower_pad2" class="pad_box2" type="capsule" size="0.009 0.012 0.008" pos="-0.0035 -0.002 -0.009" quat="1 1 0 0"/>
-                                  <body name="left_pad" pos="-0.0377897 -0.103916 -0.0091" quat="0.707107 -0.707107 3.16527e-05 -3.16527e-05" gravcomp="1">
-                                    <geom class="pad_box2" name="left_finger_pad"/>
-                                  </body>
-                                </body>
-                              </body>
-                              <!-- Right-hand side 4-bar linkage -->
-                              <body name="right_driver" pos="0.0306011 -0.00475 0.0657045" quat="0 0 -0.707107 0.707107" gravcomp="1">
-                                <inertial mass="0.00899563" pos="2.96931e-12 0.0177547 0.00107314" quat="0.681301 0.732003 0 0"
-                                diaginertia="1.72352e-06 1.60906e-06 3.22006e-07"/>
-                                <joint name="right_driver_joint" class="driver"/>
-                                <geom class="visual_gripper" pos="0.0306011 0.0549045 -0.0047" quat="0.707107 0.707107 0 0" material="metal" mesh="driver"/>
-                                <body name="right_coupler" pos="-0.0314249 0.00453223 -0.0102" quat="0 0 0 1" gravcomp="1">
-                                  <inertial mass="0.0140974" pos="0 0.00301209 0.0232175" quat="0.705636 -0.0455904 0.0455904 0.705636"
-                                  diaginertia="4.16206e-06 3.52216e-06 8.88131e-07"/>
-                                  <geom class="visual_gripper" pos="-0.062026 -0.0503723 0.0055" quat="0.707107 -0.707107 0 0"   mesh="coupler"/>
-                                  <geom name="right_coupler_col_1" class="pad_box2" pos="0.005 0.025 0.01" quat="1 1 -0.1 0" type="capsule" size="0.009 0.02"/>
-                                  <geom name="right_coupler_col_2" class="pad_box2" pos="0.005 0.025 0.001" quat="1 1 -0.1 0" type="capsule" size="0.009 0.02"/>
-                                </body>
-                              </body>
-                              <body name="right_spring_link" pos="0.0127 0.012 0.07222" quat="0 0 -0.707107 0.707107" gravcomp="1">
-                                <inertial mass="0.0221642" pos="-8.65005e-09 0.0181624 0.0212658" quat="0.663403 -0.244737 0.244737 0.663403"
-                                diaginertia="8.96853e-06 6.71733e-06 2.63931e-06"/>
-                                <joint name="right_spring_link_joint" class="spring_link"/>
-                                <geom class="visual_gripper" pos="0.0127 0.06142 0.01205" quat="0.707107 0.707107 0 0"   mesh="spring_link"/>
-                                <body name="right_follower" pos="-0.0382079 -0.0425003 0.00295" quat="0 -1 1.79721e-11 0" gravcomp="1">
-                                  <inertial mass="0.0125222" pos="0 -0.011046 0.0124786" quat="1 0.1664 0 0"
-                                  diaginertia="2.67415e-06 2.4559e-06 6.02031e-07"/>
-                                  <joint name="right_follower_joint" class="follower"/>
-                                  <geom class="visual_gripper" pos="0.0509079 -0.10392 -0.0091" quat="0.707107 -0.707107 0 0" material="metal" mesh="tongue"/>
-                                  <geom class="visual_gripper" pos="0.0509079 -0.10392 -0.0091" quat="0.707107 -0.707107 0 0" mesh="follower"/>
-                                  <geom name="right_follower_pad2" class="pad_box2" type="capsule" size="0.009 0.012 0.008" pos="-0.0035 -0.002 -0.009" quat="1 1 0 0"/>
-                                  <body name="right_pad" pos="-0.0377897 -0.103916 -0.0091" quat="0.707107 -0.707107 3.16527e-05 -3.16527e-05" gravcomp="1">
-                                    <geom class="pad_box2" name="right_finger_pad"/>
-                                  </body>
-                                </body>
-                              </body>
-                            </body>
+                      <!-- Left-hand side 4-bar linkage -->
+                      <body name="left_driver" pos="-0.0306011 0.00475 0.0657045" quat="0.707107 -0.707107 0 0" gravcomp="1">
+                        <inertial mass="0.00899563" pos="0 0.0177547 0.00107314" quat="0.681301 0.732003 0 0"
+                            diaginertia="1.72352e-06 1.60906e-06 3.22006e-07"/>
+                        <joint name="left_driver_joint" class="driver"/>
+                        <geom class="visual_gripper" pos="0.0306011 0.0549045 -0.0047" quat="0.707107 0.707107 0 0"  material="metal" mesh="driver"/>
+                        <body name="left_coupler" pos="-0.0314249 0.00453223 -0.0102" quat="8.02038e-06 0 0 1" gravcomp="1">
+                          <inertial mass="0.0140974" pos="0 0.00301209 0.0232175" quat="0.705636 -0.0455904 0.0455904 0.705636"
+                          diaginertia="4.16206e-06 3.52216e-06 8.88131e-07"/>
+                          <geom class="visual_gripper" pos="-0.062026 -0.0503723 0.0055" quat="0.707107 -0.707107 0 0"   mesh="coupler"/>
+                          <geom name="left_coupler_col_1" class="pad_box2" pos="0.005 0.025 0.01" quat="1 1 -0.1 0" type="capsule" size="0.009 0.02"/>
+                          <geom name="left_coupler_col_2" class="pad_box2" pos="0.005 0.025 0.001" quat="1 1 -0.1 0" type="capsule" size="0.009 0.02"/>
+                        </body>
+                      </body>
+                      <body name="left_spring_link" pos="-0.0127 -0.012 0.07222" quat="0.707107 -0.707107 -4.97726e-06 -4.97726e-06" gravcomp="1">
+                        <inertial mass="0.0221642" pos="-8.65005e-09 0.0181624 0.0212658" quat="0.663403 -0.244737 0.244737 0.663403"
+                            diaginertia="8.96853e-06 6.71733e-06 2.63931e-06"/>
+                        <joint name="left_spring_link_joint" class="spring_link"/>
+                        <geom class="visual_gripper" pos="0.0127 0.06142 0.01205" quat="0.707107 0.707107 0 0" type="mesh"  mesh="spring_link"/>
+                        <body name="left_follower" pos="-0.0382079 -0.0425003 0.00295" quat="0 -1 -1.90231e-05 0" gravcomp="1">
+                          <inertial mass="0.0125222" pos="0 -0.011046 0.0124786" quat="1 0.1664 0 0"
+                          diaginertia="2.67415e-06 2.4559e-06 6.02031e-07"/>
+                          <joint name="left_follower" class="follower"/>
+                          <geom class="visual_gripper" pos="0.0509079 -0.10392 -0.0091" quat="0.707107 -0.707107 0 0" type="mesh"  mesh="follower"/>
+                          <geom class="visual_gripper" pos="0.0509079 -0.10392 -0.0091" quat="0.707107 -0.707107 0 0" type="mesh" material="metal" mesh="tongue"/>
+                          <geom name="left_follower_pad2" class="pad_box2" type="capsule" size="0.009 0.012 0.008" pos="-0.0035 -0.002 -0.009" quat="1 1 0 0"/>
+                          <body name="left_pad" pos="-0.0377897 -0.103916 -0.0091" quat="0.707107 -0.707107 3.16527e-05 -3.16527e-05" gravcomp="1">
+                            <geom class="pad_box2" name="left_finger_pad"/>
+                          </body>
+                        </body>
+                      </body>
+                      <!-- Right-hand side 4-bar linkage -->
+                      <body name="right_driver" pos="0.0306011 -0.00475 0.0657045" quat="0 0 -0.707107 0.707107" gravcomp="1">
+                        <inertial mass="0.00899563" pos="2.96931e-12 0.0177547 0.00107314" quat="0.681301 0.732003 0 0"
+                        diaginertia="1.72352e-06 1.60906e-06 3.22006e-07"/>
+                        <joint name="right_driver_joint" class="driver"/>
+                        <geom class="visual_gripper" pos="0.0306011 0.0549045 -0.0047" quat="0.707107 0.707107 0 0" material="metal" mesh="driver"/>
+                        <body name="right_coupler" pos="-0.0314249 0.00453223 -0.0102" quat="0 0 0 1" gravcomp="1">
+                          <inertial mass="0.0140974" pos="0 0.00301209 0.0232175" quat="0.705636 -0.0455904 0.0455904 0.705636"
+                          diaginertia="4.16206e-06 3.52216e-06 8.88131e-07"/>
+                          <geom class="visual_gripper" pos="-0.062026 -0.0503723 0.0055" quat="0.707107 -0.707107 0 0"   mesh="coupler"/>
+                          <geom name="right_coupler_col_1" class="pad_box2" pos="0.005 0.025 0.01" quat="1 1 -0.1 0" type="capsule" size="0.009 0.02"/>
+                          <geom name="right_coupler_col_2" class="pad_box2" pos="0.005 0.025 0.001" quat="1 1 -0.1 0" type="capsule" size="0.009 0.02"/>
+                        </body>
+                      </body>
+                      <body name="right_spring_link" pos="0.0127 0.012 0.07222" quat="0 0 -0.707107 0.707107" gravcomp="1">
+                        <inertial mass="0.0221642" pos="-8.65005e-09 0.0181624 0.0212658" quat="0.663403 -0.244737 0.244737 0.663403"
+                        diaginertia="8.96853e-06 6.71733e-06 2.63931e-06"/>
+                        <joint name="right_spring_link_joint" class="spring_link"/>
+                        <geom class="visual_gripper" pos="0.0127 0.06142 0.01205" quat="0.707107 0.707107 0 0"   mesh="spring_link"/>
+                        <body name="right_follower" pos="-0.0382079 -0.0425003 0.00295" quat="0 -1 1.79721e-11 0" gravcomp="1">
+                          <inertial mass="0.0125222" pos="0 -0.011046 0.0124786" quat="1 0.1664 0 0"
+                          diaginertia="2.67415e-06 2.4559e-06 6.02031e-07"/>
+                          <joint name="right_follower_joint" class="follower"/>
+                          <geom class="visual_gripper" pos="0.0509079 -0.10392 -0.0091" quat="0.707107 -0.707107 0 0" material="metal" mesh="tongue"/>
+                          <geom class="visual_gripper" pos="0.0509079 -0.10392 -0.0091" quat="0.707107 -0.707107 0 0" mesh="follower"/>
+                          <geom name="right_follower_pad2" class="pad_box2" type="capsule" size="0.009 0.012 0.008" pos="-0.0035 -0.002 -0.009" quat="1 1 0 0"/>
+                          <body name="right_pad" pos="-0.0377897 -0.103916 -0.0091" quat="0.707107 -0.707107 3.16527e-05 -3.16527e-05" gravcomp="1">
+                            <geom class="pad_box2" name="right_finger_pad"/>
                           </body>
                         </body>
                       </body>
@@ -344,13 +326,18 @@
         </body>
       </body>
     </body>
+
+    <!-- <body mocap="true" name="panda_ply">
+      <geom type="mesh" mesh="panda_ply" rgba="1 0 0 0.5" contype="0" conaffinity="0"/>
+    </body> -->
+
   </worldbody>
 
   <contact>
-    <exclude body1="base" body2="left_driver"/>
-    <exclude body1="base" body2="right_driver"/>
-    <exclude body1="base" body2="left_spring_link"/>
-    <exclude body1="base" body2="right_spring_link"/>
+    <exclude body1="robotiq_base" body2="left_driver"/>
+    <exclude body1="robotiq_base" body2="right_driver"/>
+    <exclude body1="robotiq_base" body2="left_spring_link"/>
+    <exclude body1="robotiq_base" body2="right_spring_link"/>
     <exclude body1="right_coupler" body2="right_follower"/>
     <exclude body1="left_coupler" body2="left_follower"/>
   </contact>
@@ -363,6 +350,7 @@
   </equality>
 
   <actuator>
+    
     <motor class="panda" name="actuator1" joint="joint1"/>
     <motor class="panda" name="actuator2" joint="joint2"/>
     <motor class="panda" name="actuator3" joint="joint3"/>
@@ -370,23 +358,23 @@
     <motor class="panda" name="actuator5" joint="joint5" forcerange="-12 12" gear="20"/>
     <motor class="panda" name="actuator6" joint="joint6" forcerange="-12 12" gear="20"/>
     <motor class="panda" name="actuator7" joint="joint7" forcerange="-12 12" gear="20"/>
-    <general class="2f85" name="fingers_actuator" joint="left_driver_joint" forcerange="-5 5" ctrlrange="0 0.82"
-      gainprm="100 0 0" biasprm="0 -100 -10"/>
+    <general class="2f85" name="fingers_actuator" joint="left_driver_joint" forcerange="-5 5" ctrlrange="0 0.82" gainprm="100 0 0" biasprm="0 -100 -10"/>
+   
+    <!-- <position class="panda" name="actuator1" joint="joint1" kp="1000" kv="20" ctrlrange="-2.8973 2.8973"/>
+    <position class="panda" name="actuator2" joint="joint2" kp="1000" kv="20" ctrlrange="-1.7628 1.7628"/>
+    <position class="panda" name="actuator3" joint="joint3" kp="750" kv="4" ctrlrange="-2.8973 2.8973"/>
+    <position class="panda" name="actuator4" joint="joint4" kp="750" kv="4" ctrlrange="-3.0718 -0.0698"/>
+    <position class="panda" name="actuator5" joint="joint5" kp="300" kv="2" forcerange="-12 12" ctrlrange="-2.8973 2.8973"/>
+    <position class="panda" name="actuator6" joint="joint6" kp="300" kv="2" forcerange="-12 12" ctrlrange="-0.0175 3.7525"/>
+    <position class="panda" name="actuator7" joint="joint7" kp="300" kv="2" forcerange="-12 12"/>
+    <general class="2f85" name="fingers_actuator" joint="left_driver_joint" forcerange="-5 5" ctrlrange="0 0.82" gainprm="100 0 0" biasprm="0 -100 -10"/> -->
+
   </actuator>
 
   <keyframe>
     <key name="home"
-      qpos="0 -0.785 0 -2.355 0 1.57 0  0 0 0 0 0 0"
-      ctrl="0 0 0 0 0 0 0 0"
+      qpos="0 -0.76219644  0 -2.75629741 0 1.96083466 0 0 0 0 0 0 0"
     />
   </keyframe>
 
 </mujoco>
-
-
-<!-- <key
-  time="65.412"
-  qpos="0 1 2 3 0 3 0  "
-  qvel="-3.71484e-17 -5.29332e-14 -4.39849e-16 -1.09797e-13 -4.69275e-16 -1.02471e-13 1.51696e-17 -1.20997e-15 -2.46121e-14 4.74618e-14 5.92194e-16 4.04953e-14 -7.41074e-14"
-  ctrl="0 0.01 0 -2.355 0 1.57 0 0"
-/> -->
