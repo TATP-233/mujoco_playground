@@ -17,29 +17,12 @@
 from collections import deque
 import functools
 import os
-from typing import Any
-
 import jax
 import numpy as np
-
-try:
-  from rsl_rl.env import VecEnv  # pytype: disable=import-error
-except ImportError:
-  VecEnv = object
-try:
-  import torch  # pytype: disable=import-error
-except ImportError:
-  torch = None
-
+from rsl_rl.env import VecEnv
 from mujoco_playground._src import wrapper
-try:
-  from tensordict import TensorDict  # pytype: disable=import-error
-except ImportError:
-  TensorDict = None
-
+from tensordict import TensorDict
 import torch
-import torch.utils.dlpack as tpack
-from etils import epath
 from mujoco_playground._src.gaussian_renderer import BatchSplatConfig, BatchSplatRenderer
 
 
@@ -271,38 +254,36 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
     background_ply = None
     bg_img_template = None
 
-    if hasattr(self.env.unwrapped, '_config'):
-        c = self.env.unwrapped._config
-        if hasattr(c, 'vision_config'):
-          self.height = c.vision_config.render_height
-          self.width = c.vision_config.render_width
-          if hasattr(c.vision_config, 'body_gaussians'):
-            body_gaussians = c.vision_config.body_gaussians
-            if hasattr(body_gaussians, 'to_dict'):
-              body_gaussians = body_gaussians.to_dict()
-          else:
-            raise ValueError("BatchSplatWrapper requires body_gaussians in vision_config.")
-          if hasattr(c.vision_config, 'background'):
-            background_ply = c.vision_config.background
-          
-          if hasattr(c.vision_config, 'bg_img') and c.vision_config.bg_img is not None:
-            bg = c.vision_config.bg_img
-            if isinstance(bg, np.ndarray):
-              bg = torch.from_numpy(bg)
-            elif not isinstance(bg, torch.Tensor):
-              bg = torch.tensor(bg)
-            
-            if bg.dtype == torch.uint8:
-              bg = bg.float() / 255.0
-            else:
-              bg = bg.float()
-            
-            expected_shape = (mj_model.ncam, self.height, self.width, 3)
-            if bg.shape != expected_shape:
-              raise ValueError(f"bg_img shape mismatch. Expected {expected_shape}, got {bg.shape}")
-            
-            bg_img_template = bg
-
+    c = self.env.unwrapped._config
+    self.height = c.vision_config.render_height
+    self.width = c.vision_config.render_width
+    if hasattr(c.vision_config, 'body_gaussians'):
+      body_gaussians = c.vision_config.body_gaussians
+      if hasattr(body_gaussians, 'to_dict'):
+        body_gaussians = body_gaussians.to_dict()
+    else:
+      raise ValueError("BatchSplatWrapper requires body_gaussians in vision_config.")
+    if hasattr(c.vision_config, 'background'):
+      background_ply = c.vision_config.background
+    
+    if hasattr(c.vision_config, 'bg_img') and c.vision_config.bg_img is not None:
+      bg = c.vision_config.bg_img
+      if isinstance(bg, np.ndarray):
+        bg = torch.from_numpy(bg)
+      elif not isinstance(bg, torch.Tensor):
+        bg = torch.tensor(bg)
+      
+      if bg.dtype == torch.uint8:
+        bg = bg.float() / 255.0
+      else:
+        bg = bg.float()
+      
+      expected_shape = (mj_model.ncam, self.height, self.width, 3)
+      if bg.shape != expected_shape:
+        raise ValueError(f"bg_img shape mismatch. Expected {expected_shape}, got {bg.shape}")
+      
+      bg_img_template = bg
+  
     cfg = BatchSplatConfig(
         body_gaussians=body_gaussians,
         background_ply=background_ply,
