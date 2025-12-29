@@ -132,31 +132,6 @@ class PandaPickCubeCartesian(pick.PandaPickCube):
         for geom in ["left_finger_pad", "right_finger_pad", "hand_capsule"]
     ]
 
-    if self._vision:
-      try:
-        # pylint: disable=import-outside-toplevel
-        from madrona_mjx.renderer import BatchRenderer  # pytype: disable=import-error
-      except ImportError:
-        warnings.warn(
-            'Madrona MJX not installed. Cannot use vision with'
-            ' PandaPickCubeCartesian.'
-        )
-        return
-      self.renderer = BatchRenderer(
-          m=self._mjx_model,
-          gpu_id=self._config.vision_config.gpu_id,
-          num_worlds=self._config.vision_config.render_batch_size,
-          batch_render_view_width=self._config.vision_config.render_width,
-          batch_render_view_height=self._config.vision_config.render_height,
-          enabled_geom_groups=np.asarray(
-              self._config.vision_config.enabled_geom_groups
-          ),
-          enabled_cameras=None,  # Use all cameras.
-          add_cam_debug_geo=False,
-          use_rasterizer=self._config.vision_config.use_rasterizer,
-          viz_gpu_hdls=None,
-      )
-
   def _post_init(self, obj_name, keyframe):
     super()._post_init(obj_name, keyframe)
     self._guide_q = self._mj_model.keyframe('picked').qpos
@@ -183,7 +158,8 @@ class PandaPickCubeCartesian(pick.PandaPickCube):
 
   def reset(self, rng: jax.Array) -> mjx_env.State:
     """Resets the environment to an initial state."""
-    x_plane = self._start_tip_transform[0, 3] - 0.03  # Account for finite gain
+    # x_plane = self._start_tip_transform[0, 3] - 0.03  # Account for finite gain
+    x_plane = self._start_tip_transform[0, 3]
 
     # intialize box position
     rng, rng_box = jax.random.split(rng)
@@ -191,7 +167,7 @@ class PandaPickCubeCartesian(pick.PandaPickCube):
     box_pos = jp.array([
         x_plane,
         jax.random.uniform(rng_box, (), minval=-r_range, maxval=r_range),
-        0.0,
+        0.03,
     ])
 
     # Fixed target position to simplify pixels-only training.
@@ -217,11 +193,13 @@ class PandaPickCubeCartesian(pick.PandaPickCube):
     data = data.replace(
         mocap_quat=data.mocap_quat.at[self._mocap_target, :].set(target_quat)
     )
-    if not self._vision:
-      # mocap target should not appear in the pixels observation.
-      data = data.replace(
-          mocap_pos=data.mocap_pos.at[self._mocap_target, :].set(target_pos)
-      )
+    if self._vision:
+        data = mjx.forward(self._mjx_model, data)
+
+    # mocap target should not appear in the pixels observation.
+    data = data.replace(
+        mocap_pos=data.mocap_pos.at[self._mocap_target, :].set(target_pos)
+    )
 
     # initialize env state and info
     metrics = {
@@ -241,7 +219,7 @@ class PandaPickCubeCartesian(pick.PandaPickCube):
         'prev_reward': jp.array(0.0, dtype=float),
         'current_pos': self._start_tip_transform[:3, 3],
         'newly_reset': jp.array(False, dtype=bool),
-        'prev_action': jp.zeros(3),
+        'prev_action': jp.zeros(4),
         '_steps': jp.array(0, dtype=int),
         'action_history': jp.zeros((
             self._config.action_history_length,
@@ -250,31 +228,18 @@ class PandaPickCubeCartesian(pick.PandaPickCube):
 
     reward, done = jp.zeros(2)
 
-    obs = self._get_obs(data, info)
-    obs = jp.concat([obs, jp.zeros(1), jp.zeros(3)], axis=0)
     if self._vision:
-      rng_brightness, rng = jax.random.split(rng)
-      brightness = jax.random.uniform(
-          rng_brightness,
-          (1,),
-          minval=self._config.obs_noise.brightness[0],
-          maxval=self._config.obs_noise.brightness[1],
-      )
-      info.update({'brightness': brightness})
-
-      render_token, rgb, _ = self.renderer.init(data, self._mjx_model)
-      info.update({'render_token': render_token})
-
-      obs = jp.asarray(rgb[0][..., :3], dtype=jp.float32) / 255.0
-      obs = adjust_brightness(obs, brightness)
-      obs = {'pixels/view_0': obs}
+        obs = jp.zeros(1)
+    else:
+        obs = self._get_obs(data, info)
+        obs = jp.concat([obs, jp.zeros(1), jp.zeros(4)], axis=0)
 
     return mjx_env.State(data, obs, reward, done, metrics, info)
 
   def step(self, state: mjx_env.State, action: jax.Array) -> mjx_env.State:
     """Runs one timestep of the environment's dynamics."""
     action_history = (
-        jp.roll(state.info['action_history'], 1).at[0].set(action[2])
+        jp.roll(state.info['action_history'], 1).at[0].set(action[3])
     )
     state.info['action_history'] = action_history
     # Add action delay
@@ -282,7 +247,7 @@ class PandaPickCubeCartesian(pick.PandaPickCube):
     action_idx = jax.random.randint(
         key, (), minval=0, maxval=self._config.action_history_length
     )
-    action = action.at[2].set(state.info['action_history'][action_idx])
+    action = action.at[3].set(state.info['action_history'][action_idx])
 
     state.info['newly_reset'] = state.info['_steps'] == 0
 
@@ -297,7 +262,7 @@ class PandaPickCubeCartesian(pick.PandaPickCube):
         newly_reset, 0.0, state.info['reached_box']
     )
     state.info['prev_action'] = jp.where(
-        newly_reset, jp.zeros(3), state.info['prev_action']
+        newly_reset, jp.zeros(4), state.info['prev_action']
     )
 
     # Ocassionally aid exploration.
@@ -316,7 +281,7 @@ class PandaPickCubeCartesian(pick.PandaPickCube):
 
     # Cartesian control
     increment = jp.zeros(4)
-    increment = increment.at[1:].set(action)  # set y, z and gripper commands.
+    increment = increment.at[:].set(action)  # set x, y, z and gripper commands.
     ctrl, new_tip_position, no_soln = self._move_tip(
         state.info['current_pos'],
         self._start_tip_transform[:3, :3],
@@ -328,6 +293,8 @@ class PandaPickCubeCartesian(pick.PandaPickCube):
 
     # Simulator step
     data = mjx_env.step(self._mjx_model, data, ctrl, self.n_substeps)
+    if self._vision:
+        data = mjx.forward(self._mjx_model, data)
 
     # Dense rewards
     raw_rewards = self._get_reward(data, state.info)
@@ -345,12 +312,12 @@ class PandaPickCubeCartesian(pick.PandaPickCube):
 
     total_reward = jp.clip(sum(rewards.values()), -1e4, 1e4)
 
-    if not self._vision:
-      # Vision policy cannot access the required state-based observations.
-      da = jp.linalg.norm(action - state.info['prev_action'])
-      state.info['prev_action'] = action
-      total_reward += self._config.reward_config.action_rate * da
-      total_reward += no_soln * self._config.reward_config.no_soln_reward
+    # if not self._vision:
+    #   # Vision policy cannot access the required state-based observations.
+    #   da = jp.linalg.norm(action - state.info['prev_action'])
+    #   state.info['prev_action'] = action
+    #   total_reward += self._config.reward_config.action_rate * da
+    #   total_reward += no_soln * self._config.reward_config.no_soln_reward
 
     # Sparse rewards
     box_pos = data.xpos[self._obj_body]
@@ -392,13 +359,11 @@ class PandaPickCubeCartesian(pick.PandaPickCube):
         state.info['_steps'],
     )
 
-    obs = self._get_obs(data, state.info)
-    obs = jp.concat([obs, no_soln.reshape(1), action], axis=0)
     if self._vision:
-      _, rgb, _ = self.renderer.render(state.info['render_token'], data)
-      obs = jp.asarray(rgb[0][..., :3], dtype=jp.float32) / 255.0
-      obs = adjust_brightness(obs, state.info['brightness'])
-      obs = {'pixels/view_0': obs}
+        obs = jp.zeros(1)
+    else:
+        obs = self._get_obs(data, state.info)
+        obs = jp.concat([obs, no_soln.reshape(1), action], axis=0)
 
     return state.replace(
         data=data,
@@ -460,7 +425,7 @@ class PandaPickCubeCartesian(pick.PandaPickCube):
 
   @property
   def action_size(self) -> int:
-    return 3
+    return 4 #3
 
   @property
   def xml_path(self) -> str:

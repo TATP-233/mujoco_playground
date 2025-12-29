@@ -101,6 +101,8 @@ def main(argv):
   """Run training and evaluation for the specified environment using RSL-RL."""
   del argv  # unused
 
+  project_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../")
+
   wp.config.kernel_cache_dir = _WP_KERNEL_CACHE_DIR.value
 
   # Possibly parse the device for multi-GPU
@@ -129,7 +131,6 @@ def main(argv):
   print(f"Experiment name: {exp_name}")
 
   # Logging directory
-  project_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../")
   logdir = os.path.abspath(os.path.join(project_path, "rslrl-training-logs/", exp_name))
   os.makedirs(logdir, exist_ok=True)
   print(f"Logs are being stored in: {logdir}")
@@ -199,7 +200,7 @@ def main(argv):
   # If resume, load from checkpoint
   if train_cfg.resume:
     resume_path = wrapper_torch.get_load_path(
-        "/tmp/rslrl-training-logs/",
+        os.path.abspath(os.path.join(project_path, "rslrl-training-logs/")),
         load_run=train_cfg.load_run,
         checkpoint=train_cfg.checkpoint,
     )

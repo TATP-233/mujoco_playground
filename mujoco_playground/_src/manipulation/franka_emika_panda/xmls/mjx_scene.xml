@@ -1,5 +1,6 @@
 <mujoco model="panda scene">
-  <include file="mjx_panda.xml"/>
+  <!-- <include file="mjx_panda.xml"/> -->
+  <include file="mjx_panda_gravcomp.xml"/>
 
   <statistic center="0.3 0 0.4" extent="1"/>
 
