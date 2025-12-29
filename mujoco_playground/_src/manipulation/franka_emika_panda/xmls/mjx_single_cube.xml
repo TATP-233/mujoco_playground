@@ -2,7 +2,10 @@
   <include file="mjx_scene.xml"/>
 
   <worldbody>
-    <camera name="side" pos="-0.231 1.390 0.494" xyaxes="-0.943 -0.334 -0.000 0.044 -0.124 0.991"/>
+    <!-- <camera name="side" pos="-0.231 1.390 0.494" xyaxes="-0.943 -0.334 -0.000 0.044 -0.124 0.991"/> -->
+    <camera name="right" pos="0.488 -0.845 0.397" xyaxes="1.000 0.021 0.000 -0.006 0.272 0.962"/>
+    <camera name="front_left" pos="0.919 0.600 0.338" xyaxes="-0.792 0.611 0.000 -0.175 -0.227 0.958"/>
+
     <body name="box" pos="0.5 0 0.03">
       <freejoint/>
       <geom type="box" name="box" size="0.02 0.02 0.03" condim="3"
@@ -11,11 +14,18 @@
     <body mocap="true" name="mocap_target">
       <geom type="box" size="0.02 0.02 0.03" rgba="1 0 0 0.2" contype="0" conaffinity="0" group="1"/>
     </body>
+    <geom name="init_space" size="0.02 1 0.01" type="plane" pos="0.5 0 0.001" rgba="0 0 1 1" contype="0" conaffinity="0"/>
   </worldbody>
 
   <include file="sensor.xml"/>
 
   <keyframe>
+    <key name="init"
+      qpos="
+        0 0.08815 0 -2.42653 0 2.52691 -0.81116 0.04 0.04 
+        0.5 0 0.03 1 0 0 0"
+      ctrl="0 0.08815 0 -2.42653 0 2.52691 -0.81116 0.04"
+    />
     <key name="home"
       qpos="
         0 0.3 0 -1.57079 0 2.0 -0.7853 0.04 0.04 

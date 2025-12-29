@@ -306,17 +306,15 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
     cfg = BatchSplatConfig(
       body_gaussians=body_gaussians,
       background_ply=background_ply,
-      minibatch=min(self.batch_size, 256)
+      minibatch=min(self.batch_size, int(256 // mj_model.ncam)) #256
     )
     self.renderer = BatchSplatRenderer(cfg, mj_model=mj_model)
-    self.fovy_torch = torch.from_numpy(
-      self.env.mj_model.cam_fovy
-    ).float().to(self.renderer.device).unsqueeze(0)
+    self.fovy_np = np.array(mj_model.cam_fovy)[None, :]
 
     if bg_img_template is not None:
       self.bg_img = bg_img_template.to(self.renderer.device).unsqueeze(0).expand(self.batch_size, -1, -1, -1, -1).contiguous()
     else:
-      self.bg_img = torch.zeros((self.batch_size, self.mj_model.ncam, self.height, self.width, 3), dtype=torch.float32, device=self.renderer.device)
+      self.bg_img = torch.zeros((self.batch_size, mj_model.ncam, self.height, self.width, 3), dtype=torch.float32, device=self.renderer.device)
 
   def step(self, action):
     action = torch.clip(action, -1.0, 1.0)
@@ -330,7 +328,7 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
     c_xmat = _jax_to_torch(self.env_state.data.cam_xmat)
     
     gsb = self.renderer.batch_update_gaussians(b_pos, b_quat)
-    rgb, _ = self.renderer.batch_env_render(gsb, c_pos, c_xmat, self.height, self.width, self.fovy_torch, self.bg_img)
+    rgb, _ = self.renderer.batch_env_render(gsb, c_pos, c_xmat, self.height, self.width, self.fovy_np, self.bg_img)
     
     # Construct observations
     critic_obs = None

@@ -26,13 +26,20 @@ from mujoco_playground._src.manipulation.franka_emika_panda import panda
 from mujoco_playground._src.mjx_env import State  # pylint: disable=g-importing-member
 import numpy as np
 
+def default_vision_config() -> config_dict.ConfigDict:
+  return config_dict.create(
+      render_batch_size=1024,
+      render_width=64,
+      render_height=64,
+  )
+
 
 def default_config() -> config_dict.ConfigDict:
   """Returns the default config for bring_to_target tasks."""
   config = config_dict.create(
       ctrl_dt=0.02,
       sim_dt=0.005,
-      episode_length=150,
+      episode_length=100, #150,
       action_repeat=1,
       action_scale=0.04,
       reward_config=config_dict.create(
@@ -47,8 +54,10 @@ def default_config() -> config_dict.ConfigDict:
               robot_target_qpos=0.3,
           )
       ),
+      vision=False,
+      vision_config=default_vision_config(),
       impl='jax',
-      nconmax=24 * 2048,
+      nconmax=12*1024, #24 * 2048,
       njmax=128,
   )
   return config
@@ -63,6 +72,8 @@ class PandaPickCube(panda.PandaBase):
       config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
       sample_orientation: bool = False,
   ):
+    self._vision = config.vision
+
     xml_path = (
         mjx_env.ROOT_PATH
         / "manipulation"
@@ -75,7 +86,7 @@ class PandaPickCube(panda.PandaBase):
         config,
         config_overrides,
     )
-    self._post_init(obj_name="box", keyframe="home")
+    self._post_init(obj_name="box", keyframe="init") # "home"
     self._sample_orientation = sample_orientation
 
     # Contact sensor IDs.
@@ -133,6 +144,8 @@ class PandaPickCube(panda.PandaBase):
         nconmax=self._config.nconmax,
         njmax=self._config.njmax,
     )
+    if self._vision:
+        data = mjx.forward(self._mjx_model, data)
 
     # set target mocap position
     data = data.replace(
@@ -146,7 +159,11 @@ class PandaPickCube(panda.PandaBase):
         **{k: 0.0 for k in self._config.reward_config.scales.keys()},
     }
     info = {"rng": rng, "target_pos": target_pos, "reached_box": 0.0}
-    obs = self._get_obs(data, info)
+    if self._vision:
+        obs = self._get_obs_vision(data, info)
+    else:
+        obs = self._get_obs(data, info)
+      
     reward, done = jp.zeros(2)
     state = State(data, obs, reward, done, metrics, info)
     return state
@@ -157,6 +174,8 @@ class PandaPickCube(panda.PandaBase):
     ctrl = jp.clip(ctrl, self._lowers, self._uppers)
 
     data = mjx_env.step(self._mjx_model, state.data, ctrl, self.n_substeps)
+    if self._vision:
+        data = mjx.forward(self._mjx_model, data)
 
     raw_rewards = self._get_reward(data, state.info)
     rewards = {
@@ -174,7 +193,10 @@ class PandaPickCube(panda.PandaBase):
         **raw_rewards, out_of_bounds=out_of_bounds.astype(float)
     )
 
-    obs = self._get_obs(data, state.info)
+    if self._vision:
+        obs = self._get_obs_vision(data, state.info)
+    else:
+        obs = self._get_obs(data, state.info)
     state = State(data, obs, reward, done, state.metrics, state.info)
 
     return state
@@ -235,6 +257,21 @@ class PandaPickCube(panda.PandaBase):
     ])
 
     return obs
+
+  def _get_obs_vision(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
+    target_mat = math.quat_to_mat(data.mocap_quat[self._mocap_target])
+    obs = jp.concatenate([
+        data.qpos[self._robot_qposadr],
+        data.qvel[self._robot_qposadr],
+        data.xmat[self._obj_body].ravel()[3:],
+        data.xpos[self._obj_body] - data.site_xpos[self._gripper_site],
+        info["target_pos"] - data.xpos[self._obj_body],
+        target_mat.ravel()[:6] - data.xmat[self._obj_body].ravel()[:6],
+        data.ctrl - data.qpos[self._robot_qposadr[:-1]],
+    ])
+
+    return obs
+      
 
 
 class PandaPickCubeOrientation(PandaPickCube):

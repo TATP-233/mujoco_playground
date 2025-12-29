@@ -31,9 +31,18 @@ from mujoco_playground import registry
 from mujoco_playground import wrapper_torch
 from mujoco_playground.config import locomotion_params
 from mujoco_playground.config import manipulation_params
+import numpy as np
 from rsl_rl.runners import OnPolicyRunner
 import torch
+import torch.nn as nn
+from tensordict import TensorDict
 import warp as wp
+
+from actor_critic_cnn import ActorCriticCNN
+import rsl_rl.modules
+
+# Register the class in rsl_rl.modules so it can be found via full path
+rsl_rl.modules.ActorCriticCNN = ActorCriticCNN
 
 try:
   import wandb  # pylint: disable=g-import-not-at-top
@@ -86,6 +95,7 @@ _WP_KERNEL_CACHE_DIR = flags.DEFINE_string(
     "/tmp/wp_kernel_cache_playground",
     "Path to the WP kernel cache directory.",
 )
+_VISION = flags.DEFINE_boolean("vision", False, "Use vision input.")
 
 
 def get_rl_config(env_name: str) -> config_dict.ConfigDict:
@@ -95,6 +105,44 @@ def get_rl_config(env_name: str) -> config_dict.ConfigDict:
     return locomotion_params.rsl_rl_config(env_name)
   else:
     raise ValueError(f"No RL config for {env_name}")
+
+
+def tile(img, d):
+  """Tiles a batch of images into a single grid image."""
+  # img shape: [N, H, W, C]
+  n, h, w, c = img.shape
+  if n < d * d:
+    # Pad with zeros if we don't have enough images
+    padding = np.zeros((d * d - n, h, w, c), dtype=img.dtype)
+    img = np.concatenate([img, padding], axis=0)
+  elif n > d * d:
+    img = img[: d * d]
+  img = img.reshape((d, d, h, w, c))
+  # Swap axes to get [d*H, d*W, C]
+  img = img.transpose(0, 2, 1, 3, 4).reshape(d * h, d * w, c)
+  return img
+
+
+def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int):
+  env_cfg.vision = True
+  env_cfg.vision_config.render_batch_size = num_envs
+  env_cfg.vision_config.render_width = 64
+  env_cfg.vision_config.render_height = 64
+  
+  if "Panda" in env_name:
+    from mujoco_playground._src import mjx_env
+    from ml_collections import ConfigDict
+    reso = "224"
+    assets_path = mjx_env.ROOT_PATH / "manipulation" / "franka_emika_panda" / "3dgs"
+    bodies = ["link0", "link1", "link2", "link3", "link4", "link5", "link6", "link7", "hand", "left_finger", "right_finger"]
+    body_gaussians = {b: (assets_path / reso / f"{b}.ply").as_posix() for b in bodies}
+    if env_name == "PandaPickCubeCartesian":
+      env_cfg.vision_config.background = (assets_path / "ribbon.ply").as_posix()
+      body_gaussians["box"] = (assets_path / "red_cube.ply").as_posix()
+    elif env_name == "PandaPickCube":
+      env_cfg.vision_config.background = (assets_path / "ribbon_blue.ply").as_posix()
+      body_gaussians["box"] = (assets_path / "green_cube.ply").as_posix()
+    env_cfg.vision_config.body_gaussians = ConfigDict(body_gaussians)
 
 
 def main(argv):
@@ -116,10 +164,16 @@ def main(argv):
     device_rank = int(device.split(":")[-1]) if "cuda" in device else 0
 
   # If play-only, use fewer envs
-  num_envs = 1 if _PLAY_ONLY.value else _NUM_ENVS.value
+  if _PLAY_ONLY.value:
+    num_envs = 64 if _VISION.value else 1
+  else:
+    num_envs = _NUM_ENVS.value
 
   # Load default config from registry
   env_cfg = registry.get_default_config(_ENV_NAME.value)
+
+  if _VISION.value:
+    configure_3dgs(env_cfg, _ENV_NAME.value, num_envs)
   print(f"Environment config:\n{env_cfg}")
 
   # Generate unique experiment name
@@ -167,25 +221,48 @@ def main(argv):
   raw_env = registry.load(
       _ENV_NAME.value, config=env_cfg, config_overrides={"impl": "jax"}
   )
-  brax_env = wrapper_torch.RSLRLBraxWrapper(
-      raw_env,
-      num_envs,
-      _SEED.value,
-      env_cfg.episode_length,
-      1,
-      render_callback=render_callback,
-      randomization_fn=randomizer,
-      device_rank=device_rank,
-  )
+  if _VISION.value:
+    brax_env = wrapper_torch.BatchSplatWrapper(
+        raw_env,
+        num_envs,
+        _SEED.value,
+        env_cfg.episode_length,
+        1,
+        render_callback=render_callback,
+        randomization_fn=randomizer,
+        device_rank=device_rank,
+    )
+  else:
+    brax_env = wrapper_torch.RSLRLBraxWrapper(
+        raw_env,
+        num_envs,
+        _SEED.value,
+        env_cfg.episode_length,
+        1,
+        render_callback=render_callback,
+        randomization_fn=randomizer,
+        device_rank=device_rank,
+    )
 
   # Build RSL-RL config
   train_cfg = get_rl_config(_ENV_NAME.value)
 
-  obs_size = raw_env.observation_size
-  if isinstance(obs_size, dict):
-    train_cfg.obs_groups = {"policy": ["state"], "critic": ["privileged_state"]}
+  if _VISION.value:
+    train_cfg.policy.class_name = "rsl_rl.modules.ActorCriticCNN"
+    
+    num_cameras = raw_env.mj_model.ncam
+    pixel_views = [f"pixels/view_{i}" for i in range(num_cameras)]
+    
+    train_cfg.obs_groups = {
+        "policy": ["state"] + pixel_views,
+        "critic": ["state"] + pixel_views,
+    }
   else:
-    train_cfg.obs_groups = {"policy": ["state"], "critic": ["state"]}
+    obs_size = raw_env.observation_size
+    if isinstance(obs_size, dict):
+      train_cfg.obs_groups = {"policy": ["state"], "critic": ["privileged_state"]}
+    else:
+      train_cfg.obs_groups = {"policy": ["state"], "critic": ["state"]}
 
   # Overwrite default config with flags
   train_cfg.seed = _SEED.value
@@ -223,6 +300,7 @@ def main(argv):
   eval_env = registry.load(
       _ENV_NAME.value, config=env_cfg, config_overrides={"impl": "jax"}
   )
+  base_eval_env = eval_env
   jit_reset = jax.jit(eval_env.reset)
   jit_step = jax.jit(eval_env.step)
 
@@ -232,23 +310,69 @@ def main(argv):
 
   # We’ll assume your environment’s observation is in state.obs["state"].
   is_dict_obs = isinstance(eval_env.observation_size, dict)
-  obs = state.obs["state"] if is_dict_obs else state.obs
-  obs_torch = wrapper_torch._jax_to_torch(obs)
+
+  def get_obs_dict(state):
+    if _VISION.value:
+      # We need to render to get pixels for the policy
+      # This is a bit slow for play_only but necessary if we want to use the vision policy
+      # Alternatively, we could have wrapped eval_env with BatchSplatWrapper
+      # For simplicity, we assume the user might want to see the video anyway
+      # But wait, raw_env.render returns frames, not the obs pixels.
+      # BatchSplatWrapper is the right way to get obs pixels.
+      # Let's see if we can just use brax_env instead of eval_env for play_only.
+      pass
+
+    if is_dict_obs:
+      return {k: wrapper_torch._jax_to_torch(v) for k, v in state.obs.items()}
+    return {"state": wrapper_torch._jax_to_torch(state.obs)}
+
+  # If vision, we MUST use a wrapper that provides pixels
+  if _VISION.value:
+    eval_env = wrapper_torch.BatchSplatWrapper(
+        eval_env,
+        num_envs,
+        _SEED.value,
+        env_cfg.episode_length,
+        1,
+        render_callback=None,
+        randomization_fn=None,
+        device_rank=device_rank,
+    )
+    # BatchSplatWrapper's reset/step return TensorDict, not jax state
+    obs_torch = eval_env.reset()
+    rollout = [eval_env.env_state]
+    # Capture initial frame
+    pixel_frames = [obs_torch["pixels/view_0"].cpu().numpy()]
+  else:
+    jit_reset = jax.jit(eval_env.reset)
+    jit_step = jax.jit(eval_env.step)
+    rng = jax.random.PRNGKey(_SEED.value)
+    state = jit_reset(rng)
+    rollout = [state]
+    obs_torch = get_obs_dict(state)
+    pixel_frames = []
 
   for _ in range(env_cfg.episode_length):
     with torch.no_grad():
-      actions = policy({"state": obs_torch})
-      actions = torch.clip(actions, -1.0, 1.0)  # from wrapper_torch.py
+      actions = policy(obs_torch)
+      actions = torch.clip(actions, -1.0, 1.0)
     # Step environment
-    state = jit_step(state, wrapper_torch._torch_to_jax(actions.flatten()))
-    rollout.append(state)
-    obs = state.obs["state"] if is_dict_obs else state.obs
-    obs_torch = wrapper_torch._jax_to_torch(obs)
-    if state.done:
-      break
+    if _VISION.value:
+      obs_torch, reward, done, info = eval_env.step(actions)
+      rollout.append(eval_env.env_state)
+      pixel_frames.append(obs_torch["pixels/view_0"].cpu().numpy())
+      if done.any():
+        break
+    else:
+      state = jit_step(state, wrapper_torch._torch_to_jax(actions.flatten()))
+      rollout.append(state)
+      obs_torch = get_obs_dict(state)
+      if state.done:
+        break
 
-  reward_sum = sum(s.reward for s in rollout)
-  print(f"Rollout reward: {reward_sum}")
+  if not _VISION.value:
+    reward_sum = sum(s.reward for s in rollout)
+    print(f"Rollout reward: {reward_sum}")
 
   # Render
   scene_option = mujoco.MjvOption()
@@ -258,16 +382,22 @@ def main(argv):
 
   render_every = 2
   # If your environment is wrapped multiple times, adjust as needed:
-  base_env = eval_env  # or brax_env.env.env.env
+  base_env = base_eval_env  # or brax_env.env.env.env
   fps = 1.0 / base_env.dt / render_every
-  traj = rollout[::render_every]
-  frames = eval_env.render(
-      traj,
-      camera=_CAMERA.value,
-      height=480,
-      width=640,
-      scene_option=scene_option,
-  )
+
+  if _VISION.value:
+    d = int(np.sqrt(num_envs))
+    frames = [tile(f, d) for f in pixel_frames[::render_every]]
+  else:
+    traj = rollout[::render_every]
+    frames = base_eval_env.render(
+        traj,
+        camera=_CAMERA.value,
+        height=480,
+        width=640,
+        scene_option=scene_option,
+    )
+
   media.write_video("rollout.mp4", frames, fps=fps)
   print("Rollout video saved as 'rollout.mp4'.")
 
