@@ -25,6 +25,10 @@ import mujoco
 from mujoco import mjx
 from mujoco_playground._src import mjx_env
 import numpy as np
+import torch
+import torch.utils.dlpack as tpack
+from etils import epath
+from mujoco_playground._src.gaussian_renderer import BatchSplatConfig, BatchSplatRenderer
 
 
 class Wrapper(mjx_env.MjxEnv):
@@ -106,8 +110,8 @@ def wrap_for_brax_training(
     action_repeat: how many repeated actions to take per step
     randomization_fn: randomization function that produces a vectorized model
       and in_axes to vmap over
-    full_reset: whether to call `env.reset` during `env.step` on done rather
-      than resetting to a cached first state. Setting full_reset=True may
+    full_reset: whether to call `env.reset` during `env.step` on done.
+      rather than resetting to a cached first state. Setting full_reset=True may
       increase wallclock time because it forces full resets to random states.
 
   Returns:
@@ -116,7 +120,7 @@ def wrap_for_brax_training(
     wrapped.
   """
   if vision:
-    env = MadronaWrapper(env, num_vision_envs, randomization_fn)
+    env = BatchSplatWrapper(env, num_vision_envs, randomization_fn)
   elif randomization_fn is None:
     env = brax_training.VmapWrapper(env)  # pytype: disable=wrong-arg-types
   else:
@@ -254,131 +258,122 @@ class BraxDomainRandomizationVmapWrapper(Wrapper):
     return res
 
 
-def _identity_vision_randomization_fn(
-    mjx_model: mjx.Model, num_worlds: int
-) -> Tuple[mjx.Model, mjx.Model]:
-  """Tile the necessary fields for the Madrona memory buffer copy."""
-  in_axes = jax.tree_util.tree_map(lambda x: None, mjx_model)
-  in_axes = in_axes.tree_replace({
-      'geom_rgba': 0,
-      'geom_matid': 0,
-      'geom_size': 0,
-      'light_pos': 0,
-      'light_dir': 0,
-      'light_type': 0,
-      'light_castshadow': 0,
-      'light_cutoff': 0,
-  })
-  mjx_model = mjx_model.tree_replace({
-      'geom_rgba': jp.repeat(
-          jp.expand_dims(mjx_model.geom_rgba, 0), num_worlds, axis=0
-      ),
-      'geom_matid': jp.repeat(
-          jp.expand_dims(jp.repeat(-1, mjx_model.geom_matid.shape[0], 0), 0),
-          num_worlds,
-          axis=0,
-      ),
-      'geom_size': jp.repeat(
-          jp.expand_dims(mjx_model.geom_size, 0), num_worlds, axis=0
-      ),
-      'light_pos': jp.repeat(
-          jp.expand_dims(mjx_model.light_pos, 0), num_worlds, axis=0
-      ),
-      'light_dir': jp.repeat(
-          jp.expand_dims(mjx_model.light_dir, 0), num_worlds, axis=0
-      ),
-      'light_type': jp.repeat(
-          jp.expand_dims(mjx_model.light_type, 0), num_worlds, axis=0
-      ),
-      'light_castshadow': jp.repeat(
-          jp.expand_dims(mjx_model.light_castshadow, 0), num_worlds, axis=0
-      ),
-      'light_cutoff': jp.repeat(
-          jp.expand_dims(mjx_model.light_cutoff, 0), num_worlds, axis=0
-      ),
-  })
-  return mjx_model, in_axes
-
-
-def _supplement_vision_randomization_fn(
-    mjx_model: mjx.Model,
-    randomization_fn: Callable[[mjx.Model], Tuple[mjx.Model, mjx.Model]],
-    num_worlds: int,
-) -> Tuple[mjx.Model, mjx.Model]:
-  """Tile the necessary missing fields for the Madrona memory buffer copy."""
-  mjx_model, in_axes = randomization_fn(mjx_model)
-
-  required_fields = [
-      'geom_rgba',
-      'geom_matid',
-      'geom_size',
-      'light_pos',
-      'light_dir',
-      'light_type',
-      'light_castshadow',
-      'light_cutoff',
-  ]
-
-  for field in required_fields:
-    if getattr(in_axes, field) is None:
-      in_axes = in_axes.tree_replace({field: 0})
-      val = -1 if field == 'geom_matid' else getattr(mjx_model, field)
-      mjx_model = mjx_model.tree_replace({
-          field: jp.repeat(jp.expand_dims(val, 0), num_worlds, axis=0),
-      })
-  return mjx_model, in_axes
-
-
-class MadronaWrapper:
-  """Wraps a MuJoCo Playground to be used in Brax with Madrona."""
+class BatchSplatWrapper:
+  """Wraps a MuJoCo Playground to be used in Brax with 3DGS BatchSplatRenderer."""
 
   def __init__(
-      self,
-      env: mjx_env.MjxEnv,
-      num_worlds: int,
-      randomization_fn: Optional[
-          Callable[[mjx.Model], Tuple[mjx.Model, mjx.Model]]
-      ] = None,
+    self,
+    env: mjx_env.MjxEnv,
+    num_worlds: int,
+    randomization_fn: Optional[
+        Callable[[mjx.Model], Tuple[mjx.Model, mjx.Model]]
+    ] = None,
   ):
-    if not randomization_fn:
-      randomization_fn = functools.partial(
-          _identity_vision_randomization_fn, num_worlds=num_worlds
-      )
+    if randomization_fn:
+      self._env = BraxDomainRandomizationVmapWrapper(env, randomization_fn)
     else:
-      randomization_fn = functools.partial(
-          _supplement_vision_randomization_fn,
-          randomization_fn=randomization_fn,
-          num_worlds=num_worlds,
-      )
-    self._env = BraxDomainRandomizationVmapWrapper(env, randomization_fn)
+      self._env = brax_training.VmapWrapper(env)
     self.num_worlds = num_worlds
+    self._init_renderer()
 
-    # For user-made DR functions, ensure that the output model includes the
-    # needed in_axes and has the correct shape for madrona initialization.
-    required_fields = [
-        'geom_rgba',
-        'geom_matid',
-        'geom_size',
-        'light_pos',
-        'light_dir',
-        'light_type',
-        'light_castshadow',
-        'light_cutoff',
-    ]
-    for field in required_fields:
-      assert hasattr(self._env._in_axes, field), f'{field} not in in_axes'
-      assert (
-          getattr(self._env._mjx_model_v, field).shape[0] == num_worlds
-      ), f'{field} shape does not match num_worlds'
+  def _init_renderer(self):
+    mj_model = self.mj_model
+    
+    self.height = 64
+    self.width = 64
+    body_gaussians = {}
+    background_ply = None
+    bg_img_template = None
+
+    if hasattr(self._env.unwrapped, '_config'):
+      c = self._env.unwrapped._config
+      if hasattr(c, 'vision_config'):
+        self.height = c.vision_config.render_height
+        self.width = c.vision_config.render_width
+        if hasattr(c.vision_config, 'body_gaussians'):
+          body_gaussians = c.vision_config.body_gaussians
+          if hasattr(body_gaussians, 'to_dict'):
+            body_gaussians = body_gaussians.to_dict()
+        else:
+          raise ValueError("BatchSplatWrapper requires body_gaussians in vision_config.")
+        if hasattr(c.vision_config, 'background'):
+          background_ply = c.vision_config.background
+
+        if hasattr(c.vision_config, 'bg_img') and c.vision_config.bg_img is not None:
+          bg = c.vision_config.bg_img
+          if isinstance(bg, np.ndarray):
+            bg = torch.from_numpy(bg)
+          elif not isinstance(bg, torch.Tensor):
+            bg = torch.tensor(bg)
+          
+          if bg.dtype == torch.uint8:
+            bg = bg.float() / 255.0
+          else:
+            bg = bg.float()
+          
+          expected_shape = (mj_model.ncam, self.height, self.width, 3)
+          if bg.shape != expected_shape:
+            raise ValueError(f"bg_img shape mismatch. Expected {expected_shape}, got {bg.shape}")
+          
+          bg_img_template = bg
+
+    cfg = BatchSplatConfig(
+      body_gaussians=body_gaussians,
+      background_ply=background_ply,
+      minibatch=min(self.num_worlds, 256)
+    )
+    self.renderer = BatchSplatRenderer(cfg, mj_model=mj_model)
+    
+    if bg_img_template is not None:
+      self.bg_img = bg_img_template.to(self.renderer.device).unsqueeze(0).expand(self.num_worlds, -1, -1, -1, -1).contiguous()
+    else:
+      self.bg_img = torch.zeros((self.num_worlds, self.mj_model.ncam, self.height, self.width, 3), dtype=torch.float32, device=self.renderer.device)
+
+  def _render_and_update_obs(self, state: mjx_env.State) -> mjx_env.State:
+    def render_fn(xpos, xquat, cam_xpos, cam_xmat):
+      # Note: jax.pure_callback moves data to CPU (host) when running under JIT.
+      # So xpos, etc. are numpy arrays on CPU. We must move them to the rendering device (GPU).
+      # True Zero-Copy between JAX(GPU) and PyTorch(GPU) inside JIT is not directly supported by pure_callback.
+      device = self.renderer.device
+      b_pos = torch.as_tensor(xpos, device=device)
+      b_quat = torch.as_tensor(xquat, device=device)
+      c_pos = torch.as_tensor(cam_xpos, device=device)
+      c_xmat = torch.as_tensor(cam_xmat, device=device)
+      
+      gsb = self.renderer.batch_update_gaussians(b_pos, b_quat)
+      fovy = np.array(self.mj_model.cam_fovy)[None, :]
+      
+      rgb, _ = self.renderer.batch_env_render(gsb, c_pos, c_xmat, self.height, self.width, fovy, self.bg_img)
+      # Must return host-accessible array (numpy) for pure_callback
+      return rgb.cpu().numpy()
+
+    out_shape = jax.ShapeDtypeStruct(
+      (self.num_worlds, self.mj_model.ncam, self.height, self.width, 3),
+      jp.float32
+    )
+    
+    rgb = jax.pure_callback(
+      render_fn,
+      out_shape,
+      state.data.xpos,
+      state.data.xquat,
+      state.data.cam_xpos,
+      state.data.cam_xmat
+    )
+    
+    new_obs = state.obs.copy() if isinstance(state.obs, dict) else {}
+    for i in range(self.mj_model.ncam):
+      new_obs[f'pixels/view_{i}'] = rgb[:, i]
+        
+    return state.replace(obs=new_obs)
 
   def reset(self, rng: jax.Array) -> mjx_env.State:
-    """Resets the environment to an initial state."""
-    return self._env.reset(rng)
+    state = self._env.reset(rng)
+    return self._render_and_update_obs(state)
 
   def step(self, state: mjx_env.State, action: jax.Array) -> mjx_env.State:
-    """Run one timestep of the environment's dynamics."""
-    return self._env.step(state, action)
+    state = self._env.step(state, action)
+    return self._render_and_update_obs(state)
 
   def __getattr__(self, name):
-    """Delegate attribute access to the wrapped instance."""
     return getattr(self._env.unwrapped, name)
