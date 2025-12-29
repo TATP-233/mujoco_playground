@@ -272,48 +272,51 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
     bg_img_template = None
 
     if hasattr(self.env.unwrapped, '_config'):
-        c = self.env.unwrapped._config
-        if hasattr(c, 'vision_config'):
-          self.height = c.vision_config.render_height
-          self.width = c.vision_config.render_width
-          if hasattr(c.vision_config, 'body_gaussians'):
-            body_gaussians = c.vision_config.body_gaussians
-            if hasattr(body_gaussians, 'to_dict'):
-              body_gaussians = body_gaussians.to_dict()
-          else:
-            raise ValueError("BatchSplatWrapper requires body_gaussians in vision_config.")
-          if hasattr(c.vision_config, 'background'):
-            background_ply = c.vision_config.background
+      c = self.env.unwrapped._config
+      if hasattr(c, 'vision_config'):
+        self.height = c.vision_config.render_height
+        self.width = c.vision_config.render_width
+        if hasattr(c.vision_config, 'body_gaussians'):
+          body_gaussians = c.vision_config.body_gaussians
+          if hasattr(body_gaussians, 'to_dict'):
+            body_gaussians = body_gaussians.to_dict()
+        else:
+          raise ValueError("BatchSplatWrapper requires body_gaussians in vision_config.")
+        if hasattr(c.vision_config, 'background'):
+          background_ply = c.vision_config.background
+        
+        if hasattr(c.vision_config, 'bg_img') and c.vision_config.bg_img is not None:
+          bg = c.vision_config.bg_img
+          if isinstance(bg, np.ndarray):
+            bg = torch.from_numpy(bg)
+          elif not isinstance(bg, torch.Tensor):
+            bg = torch.tensor(bg)
           
-          if hasattr(c.vision_config, 'bg_img') and c.vision_config.bg_img is not None:
-            bg = c.vision_config.bg_img
-            if isinstance(bg, np.ndarray):
-              bg = torch.from_numpy(bg)
-            elif not isinstance(bg, torch.Tensor):
-              bg = torch.tensor(bg)
-            
-            if bg.dtype == torch.uint8:
-              bg = bg.float() / 255.0
-            else:
-              bg = bg.float()
-            
-            expected_shape = (mj_model.ncam, self.height, self.width, 3)
-            if bg.shape != expected_shape:
-              raise ValueError(f"bg_img shape mismatch. Expected {expected_shape}, got {bg.shape}")
-            
-            bg_img_template = bg
+          if bg.dtype == torch.uint8:
+            bg = bg.float() / 255.0
+          else:
+            bg = bg.float()
+          
+          expected_shape = (mj_model.ncam, self.height, self.width, 3)
+          if bg.shape != expected_shape:
+            raise ValueError(f"bg_img shape mismatch. Expected {expected_shape}, got {bg.shape}")
+          
+          bg_img_template = bg
 
     cfg = BatchSplatConfig(
-        body_gaussians=body_gaussians,
-        background_ply=background_ply,
-        minibatch=min(self.batch_size, 256)
+      body_gaussians=body_gaussians,
+      background_ply=background_ply,
+      minibatch=min(self.batch_size, 256)
     )
     self.renderer = BatchSplatRenderer(cfg, mj_model=mj_model)
-    
+    self.fovy_torch = torch.from_numpy(
+      self.env.mj_model.cam_fovy
+    ).float().to(self.renderer.device).unsqueeze(0)
+
     if bg_img_template is not None:
-        self.bg_img = bg_img_template.to(self.renderer.device).unsqueeze(0).expand(self.batch_size, -1, -1, -1, -1).contiguous()
+      self.bg_img = bg_img_template.to(self.renderer.device).unsqueeze(0).expand(self.batch_size, -1, -1, -1, -1).contiguous()
     else:
-        self.bg_img = torch.zeros((self.batch_size, self.mj_model.ncam, self.height, self.width, 3), dtype=torch.float32, device=self.renderer.device)
+      self.bg_img = torch.zeros((self.batch_size, self.mj_model.ncam, self.height, self.width, 3), dtype=torch.float32, device=self.renderer.device)
 
   def step(self, action):
     action = torch.clip(action, -1.0, 1.0)
@@ -327,9 +330,7 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
     c_xmat = _jax_to_torch(self.env_state.data.cam_xmat)
     
     gsb = self.renderer.batch_update_gaussians(b_pos, b_quat)
-    fovy = np.array(self.env.mj_model.cam_fovy)[None, :]
-    
-    rgb, _ = self.renderer.batch_env_render(gsb, c_pos, c_xmat, self.height, self.width, fovy, self.bg_img)
+    rgb, _ = self.renderer.batch_env_render(gsb, c_pos, c_xmat, self.height, self.width, self.fovy_torch, self.bg_img)
     
     # Construct observations
     critic_obs = None
@@ -345,13 +346,13 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
     # Assuming obs is a dict, if not, we need to decide how to structure it.
     # RSL-RL usually expects a dict for complex obs.
     if isinstance(obs, dict):
-        for i in range(self.env.mj_model.ncam):
-            obs[f'pixels/view_{i}'] = rgb[:, i]
+      for i in range(self.env.mj_model.ncam):
+        obs[f'pixels/view_{i}'] = rgb[:, i]
     else:
-        # If obs was a tensor, convert to dict to add pixels
-        obs = {"state": obs}
-        for i in range(self.env.mj_model.ncam):
-            obs[f'pixels/view_{i}'] = rgb[:, i]
+      # If obs was a tensor, convert to dict to add pixels
+      obs = {"state": obs}
+      for i in range(self.env.mj_model.ncam):
+        obs[f'pixels/view_{i}'] = rgb[:, i]
 
     reward = _jax_to_torch(self.env_state.reward)
     done = _jax_to_torch(self.env_state.done)
@@ -359,9 +360,9 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
     truncation = _jax_to_torch(info["truncation"])
 
     info_ret = {
-        "time_outs": truncation,
-        "observations": {"critic": critic_obs},
-        "log": {},
+      "time_outs": truncation,
+      "observations": {"critic": critic_obs},
+      "log": {},
     }
 
     if "last_episode_success_count" in info:
@@ -407,11 +408,11 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
       
     # Add pixels to observation
     if isinstance(obs, dict):
-        for i in range(self.env.mj_model.ncam):
-            obs[f'pixels/view_{i}'] = rgb[:, i]
+      for i in range(self.env.mj_model.ncam):
+        obs[f'pixels/view_{i}'] = rgb[:, i]
     else:
-        obs = {"state": obs}
-        for i in range(self.env.mj_model.ncam):
-            obs[f'pixels/view_{i}'] = rgb[:, i]
+      obs = {"state": obs}
+      for i in range(self.env.mj_model.ncam):
+        obs[f'pixels/view_{i}'] = rgb[:, i]
             
     return TensorDict(obs, batch_size=[self.num_envs])

@@ -27,25 +27,25 @@ class FrankaCfg(BaseConfig):
     gs_model_dict = {
         # "world" : "franka_robotiq.ply",
 
-        "link0" : "franka/link0.ply",
-        "link1" : "franka/link1.ply",
-        "link2" : "franka/link2.ply",
-        "link3" : "franka/link3.ply",
-        "link4" : "franka/link4.ply",
-        "link5" : "franka/link5.ply",
-        "link6" : "franka/link6.ply",
-        "link7" : "franka/link7.ply",
+        "link0" : "dexmal/franka/link0.ply",
+        "link1" : "dexmal/franka/link1.ply",
+        "link2" : "dexmal/franka/link2.ply",
+        "link3" : "dexmal/franka/link3.ply",
+        "link4" : "dexmal/franka/link4.ply",
+        "link5" : "dexmal/franka/link5.ply",
+        "link6" : "dexmal/franka/link6.ply",
+        "link7" : "dexmal/franka/link7.ply",
 
-        "robotiq_base"      : "robotiq/robotiq_base.ply",
-        "left_driver"       : "robotiq/left_driver.ply",
-        "left_coupler"      : "robotiq/left_coupler.ply",
-        "left_spring_link"  : "robotiq/left_spring_link.ply",
-        "left_follower"     : "robotiq/left_follower.ply",
+        "robotiq_base"      : "dexmal/robotiq/robotiq_base.ply",
+        "left_driver"       : "dexmal/robotiq/left_driver.ply",
+        "left_coupler"      : "dexmal/robotiq/left_coupler.ply",
+        "left_spring_link"  : "dexmal/robotiq/left_spring_link.ply",
+        "left_follower"     : "dexmal/robotiq/left_follower.ply",
 
-        "right_driver"      : "robotiq/right_driver.ply",
-        "right_coupler"     : "robotiq/right_coupler.ply",
-        "right_spring_link" : "robotiq/right_spring_link.ply",
-        "right_follower"    : "robotiq/right_follower.ply",
+        "right_driver"      : "dexmal/robotiq/right_driver.ply",
+        "right_coupler"     : "dexmal/robotiq/right_coupler.ply",
+        "right_spring_link" : "dexmal/robotiq/right_spring_link.ply",
+        "right_follower"    : "dexmal/robotiq/right_follower.ply",
     }
 
 class FrankaBase(SimulatorBase):
@@ -74,7 +74,7 @@ class FrankaBase(SimulatorBase):
 
 if __name__ == "__main__":
     cfg = FrankaCfg()
-    cfg.gs_model_dict["background"] = "franka_bg.ply"
+    cfg.gs_model_dict["background"] = "dexmal/background.ply"
     exec_node = FrankaBase(cfg)
 
     exec_node.reset()

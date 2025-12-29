@@ -1,0 +1,26 @@
+<mujoco model="franka_panda_robotiq single cube">
+  <include file="mjx_scene.xml"/>
+
+  <worldbody>
+    <camera name="side" pos="-0.104 0.637 0.225" xyaxes="-0.950 -0.314 0.000 0.032 -0.097 0.995"/>
+    <body name="box" pos="0.4 0 0.02">
+      <freejoint/>
+      <geom type="box" name="box" size="0.015 0.015 0.02" condim="3" friction="1 .03 .003" rgba="0 1 0 1" contype="2" conaffinity="1" solref="0.01 1"/>
+    </body>
+    <body mocap="true" name="mocap_target">
+      <geom type="box" size="0.015 0.015 0.02" rgba="1 0 0 0.2" contype="0" conaffinity="0"/>
+    </body>
+  </worldbody>
+
+  <include file="sensor.xml"/>
+
+  <keyframe>
+    <key name="home"
+      qpos="
+        0 -0.76219644 0 -2.75629741 0 1.96083466 0 0 0 0 0 0 0
+        0.4 0 0.02  1 0 0 0"
+      ctrl="0 -0.76219644 0 -2.75629741 0 1.96083466 0 0"
+    />
+  </keyframe>
+
+</mujoco>

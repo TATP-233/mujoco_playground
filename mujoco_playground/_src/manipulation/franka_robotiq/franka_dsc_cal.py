@@ -1,6 +1,5 @@
 import os
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider, Button, TextBox, TextBox
 import mujoco
 import torch
 import numpy as np
@@ -13,9 +12,9 @@ import OpenGL.GL as gl
 
 os.environ["DISCOVERSE_ASSETS_DIR"] = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 
-from discoverse.envs import SimulatorBase
+from discoverse.envs import SimulatorBase, SceneAlignmentGUI
 from discoverse.utils.base_config import BaseConfig
-from discoverse.gaussian_renderer.batch_gs_renderer import batch_render
+from discoverse.gaussian_renderer import batch_render
 
 class FrankaCfg(BaseConfig):
     mjcf_file_path = "xmls/panda_robotiq.xml"
@@ -34,6 +33,7 @@ class FrankaCfg(BaseConfig):
     use_gaussian_renderer = True
     gs_model_dict = {
         "world" : "franka_robotiq.ply",
+        # "world" : "franka_bg.ply",
 
         # "link0" : "franka/link0.ply",
         # "link1" : "franka/link1.ply",
@@ -106,9 +106,9 @@ class FrankaBase(SimulatorBase):
             bgimg = 2. * torch.ones((fovy_arr.shape[0], current_height, current_width, 3), dtype=torch.float32, device=cam_pos.device, requires_grad=False)
             bgimg[..., [1,2]] = 0.0
 
-            self.update_gs_scene()
+            self.gs_renderer.update_gaussians(self.mj_data)
             rgb_tensor, depth_tensor = batch_render(
-                self.gs_renderer.renderer.gaussians,
+                self.gs_renderer.gaussians,
                 cam_pos,
                 cam_xmat,
                 current_height,
@@ -158,118 +158,9 @@ if __name__ == "__main__":
     init_pos = exec_node.mj_model.body(1).pos.copy()
     init_quat = exec_node.mj_model.body(1).quat.copy()
 
-    # Setup Matplotlib GUI
-    total_sliders = 3 + 4 + nu
-    fig = plt.figure(figsize=(8, total_sliders * 0.3 + 2))
-    plt.subplots_adjust(left=0.25, bottom=0.1, right=0.95, top=0.95)
-    
-    sliders_pos = []
-    sliders_quat = []
-    sliders_joint = []
-    textboxes = []
-
-    def create_slider_textbox(idx, label, valmin, valmax, valinit):
-        ax_slider = plt.axes([0.20, 0.92 - idx * (0.85 / total_sliders), 0.55, 0.02])
-        ax_text = plt.axes([0.80, 0.92 - idx * (0.85 / total_sliders), 0.15, 0.02])
-        
-        slider = Slider(ax_slider, label, valmin, valmax, valinit=valinit)
-        textbox = TextBox(ax_text, '', initial=f"{valinit:.3f}")
-        
-        def submit(text):
-            try:
-                val = float(text)
-                val = np.clip(val, valmin, valmax)
-                slider.set_val(val)
-            except ValueError:
-                pass
-            textbox.set_val(f"{slider.val:.3f}")
-
-        textbox.on_submit(submit)
-        
-        def update_text(val):
-            textbox.set_val(f"{val:.3f}")
-            
-        slider.on_changed(update_text)
-        textboxes.append(textbox)
-        return slider
-
-    idx = 0
-    
-    # Position Sliders
-    for i, label in enumerate(['x', 'y', 'z']):
-        s = create_slider_textbox(idx, f'Pos {label}', exec_node.mj_model.body(1).pos[i] - 0.1, exec_node.mj_model.body(1).pos[i] + 0.1, init_pos[i])
-        sliders_pos.append(s)
-        idx += 1
-        
-    # Quaternion Sliders
-    for i, label in enumerate(['w', 'x', 'y', 'z']):
-        s = create_slider_textbox(idx, f'Quat {label}', -1.0, 1.0, init_quat[i])
-        sliders_quat.append(s)
-        idx += 1
-
-    # Joint Sliders
-    for i in range(nu):
-        low = exec_node.mj_model.joint(i).range[0]
-        high = exec_node.mj_model.joint(i).range[1]
-        s = create_slider_textbox(idx, exec_node.mj_model.joint(i).name if exec_node.mj_model.joint(i).name else f'Joint {i}', low, high, init_qpos[i])
-        sliders_joint.append(s)
-        idx += 1
-
-    def update_pos(val):
-        p = np.array([s.val for s in sliders_pos])
-        exec_node.mj_model.body(1).pos[:] = p
-
-    # Use a mutable object to store state instead of nonlocal
-    state = {'is_updating_quat': False}
-    
-    def update_quat(val):
-        if state['is_updating_quat']: return
-        state['is_updating_quat'] = True
-        
-        q = np.array([s.val for s in sliders_quat])
-        norm = np.linalg.norm(q)
-        if norm > 1e-6:
-            q /= norm
-        else:
-            q = np.array([1.0, 0.0, 0.0, 0.0])
-        
-        exec_node.mj_model.body(1).quat[:] = q
-        
-        for i, s in enumerate(sliders_quat):
-            if s.val != q[i]:
-                s.set_val(q[i])
-                
-        state['is_updating_quat'] = False
-
-    def update_joint(val):
-        for i, s in enumerate(sliders_joint):
-            exec_node.mj_data.qpos[i] = s.val
-            
-    for s in sliders_pos: s.on_changed(update_pos)
-    for s in sliders_quat: s.on_changed(update_quat)
-    for s in sliders_joint: s.on_changed(update_joint)
-
-    def reset(event):
-        for s in sliders_pos: s.reset()
-        for s in sliders_quat: s.reset()
-        for s in sliders_joint: s.reset()
-
-    def print_info(event):
-        print("-" * 30)
-        print(f"Pos:   {exec_node.mj_model.body(1).pos}")
-        print(f"Quat:  {exec_node.mj_model.body(1).quat}")
-        print(f"Joint: {exec_node.mj_data.qpos[:nu]}")
-
-    ax_reset = plt.axes([0.25, 0.02, 0.3, 0.05])
-    btn_reset = Button(ax_reset, 'Reset')
-    btn_reset.on_clicked(reset)
-
-    ax_print = plt.axes([0.6, 0.02, 0.3, 0.05])
-    btn_print = Button(ax_print, 'Print')
-    btn_print.on_clicked(print_info)
-
-    plt.show(block=False)
+    # Setup Scene Alignment GUI
+    gui = SceneAlignmentGUI(exec_node.mj_model, exec_node.mj_data, init_qpos, init_pos, init_quat)
 
     while exec_node.running:
-        plt.pause(0.001)
+        gui.update()
         exec_node.view()
