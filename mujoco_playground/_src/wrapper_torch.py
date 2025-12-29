@@ -37,6 +37,11 @@ try:
 except ImportError:
   TensorDict = None
 
+import torch
+import torch.utils.dlpack as tpack
+from etils import epath
+from mujoco_playground._src.gaussian_renderer import BatchSplatConfig, BatchSplatRenderer
+
 
 def _jax_to_torch(tensor):
   import torch.utils.dlpack as tpack  # pytype: disable=import-error # pylint: disable=import-outside-toplevel
@@ -229,3 +234,184 @@ class RSLRLBraxWrapper(VecEnv):
         self.observation_space  # pytype: disable=attribute-error
     )
     return info
+
+
+class BatchSplatWrapper(RSLRLBraxWrapper):
+  """Wrapper for Brax environments that interop with torch and use 3DGS BatchSplatRenderer."""
+
+  def __init__(
+      self,
+      env,
+      num_actors,
+      seed,
+      episode_length,
+      action_repeat,
+      randomization_fn=None,
+      render_callback=None,
+      device_rank=None,
+  ):
+    super().__init__(
+        env,
+        num_actors,
+        seed,
+        episode_length,
+        action_repeat,
+        randomization_fn,
+        render_callback,
+        device_rank,
+    )
+    self._init_renderer()
+
+  def _init_renderer(self):
+    mj_model = self.env.mj_model
+    
+    self.height = 64
+    self.width = 64
+    body_gaussians = {}
+    background_ply = None
+    bg_img_template = None
+
+    if hasattr(self.env.unwrapped, '_config'):
+        c = self.env.unwrapped._config
+        if hasattr(c, 'vision_config'):
+          self.height = c.vision_config.render_height
+          self.width = c.vision_config.render_width
+          if hasattr(c.vision_config, 'body_gaussians'):
+            body_gaussians = c.vision_config.body_gaussians
+            if hasattr(body_gaussians, 'to_dict'):
+              body_gaussians = body_gaussians.to_dict()
+          else:
+            raise ValueError("BatchSplatWrapper requires body_gaussians in vision_config.")
+          if hasattr(c.vision_config, 'background'):
+            background_ply = c.vision_config.background
+          
+          if hasattr(c.vision_config, 'bg_img') and c.vision_config.bg_img is not None:
+            bg = c.vision_config.bg_img
+            if isinstance(bg, np.ndarray):
+              bg = torch.from_numpy(bg)
+            elif not isinstance(bg, torch.Tensor):
+              bg = torch.tensor(bg)
+            
+            if bg.dtype == torch.uint8:
+              bg = bg.float() / 255.0
+            else:
+              bg = bg.float()
+            
+            expected_shape = (mj_model.ncam, self.height, self.width, 3)
+            if bg.shape != expected_shape:
+              raise ValueError(f"bg_img shape mismatch. Expected {expected_shape}, got {bg.shape}")
+            
+            bg_img_template = bg
+
+    cfg = BatchSplatConfig(
+        body_gaussians=body_gaussians,
+        background_ply=background_ply,
+        minibatch=min(self.batch_size, 256)
+    )
+    self.renderer = BatchSplatRenderer(cfg, mj_model=mj_model)
+    
+    if bg_img_template is not None:
+        self.bg_img = bg_img_template.to(self.renderer.device).unsqueeze(0).expand(self.batch_size, -1, -1, -1, -1).contiguous()
+    else:
+        self.bg_img = torch.zeros((self.batch_size, self.mj_model.ncam, self.height, self.width, 3), dtype=torch.float32, device=self.renderer.device)
+
+  def step(self, action):
+    action = torch.clip(action, -1.0, 1.0)
+    action = _torch_to_jax(action)
+    self.env_state = self.step_fn(self.env_state, action)
+    
+    # Render
+    b_pos = _jax_to_torch(self.env_state.data.xpos)
+    b_quat = _jax_to_torch(self.env_state.data.xquat)
+    c_pos = _jax_to_torch(self.env_state.data.cam_xpos)
+    c_xmat = _jax_to_torch(self.env_state.data.cam_xmat)
+    
+    gsb = self.renderer.batch_update_gaussians(b_pos, b_quat)
+    fovy = np.array(self.env.mj_model.cam_fovy)[None, :]
+    
+    rgb, _ = self.renderer.batch_env_render(gsb, c_pos, c_xmat, self.height, self.width, fovy, self.bg_img)
+    
+    # Construct observations
+    critic_obs = None
+    if self.asymmetric_obs:
+      obs = _jax_to_torch(self.env_state.obs["state"])
+      critic_obs = _jax_to_torch(self.env_state.obs["privileged_state"])
+      obs = {"state": obs, "privileged_state": critic_obs}
+    else:
+      obs = _jax_to_torch(self.env_state.obs)
+      obs = {"state": obs}
+      
+    # Add pixels to observation
+    # Assuming obs is a dict, if not, we need to decide how to structure it.
+    # RSL-RL usually expects a dict for complex obs.
+    if isinstance(obs, dict):
+        for i in range(self.env.mj_model.ncam):
+            obs[f'pixels/view_{i}'] = rgb[:, i]
+    else:
+        # If obs was a tensor, convert to dict to add pixels
+        obs = {"state": obs}
+        for i in range(self.env.mj_model.ncam):
+            obs[f'pixels/view_{i}'] = rgb[:, i]
+
+    reward = _jax_to_torch(self.env_state.reward)
+    done = _jax_to_torch(self.env_state.done)
+    info = self.env_state.info
+    truncation = _jax_to_torch(info["truncation"])
+
+    info_ret = {
+        "time_outs": truncation,
+        "observations": {"critic": critic_obs},
+        "log": {},
+    }
+
+    if "last_episode_success_count" in info:
+      last_episode_success_count = (
+          _jax_to_torch(info["last_episode_success_count"])[done > 0]
+          .float()
+          .tolist()
+      )
+      if len(last_episode_success_count) > 0:
+        self.success_queue.extend(last_episode_success_count)
+      info_ret["log"]["last_episode_success_count"] = np.mean(
+          self.success_queue
+      )
+
+    for k, v in self.env_state.metrics.items():
+      if k not in info_ret["log"]:
+        info_ret["log"][k] = _jax_to_torch(v).float().mean().item()
+
+    obs = TensorDict(obs, batch_size=[self.num_envs])
+    return obs, reward, done, info_ret
+
+  def reset(self):
+    self.env_state = self.reset_fn(self.key_reset)
+    
+    # Render initial state
+    b_pos = _jax_to_torch(self.env_state.data.xpos)
+    b_quat = _jax_to_torch(self.env_state.data.xquat)
+    c_pos = _jax_to_torch(self.env_state.data.cam_xpos)
+    c_xmat = _jax_to_torch(self.env_state.data.cam_xmat)
+    
+    gsb = self.renderer.batch_update_gaussians(b_pos, b_quat)
+    fovy = np.array(self.env.mj_model.cam_fovy)[None, :]
+    
+    rgb, _ = self.renderer.batch_env_render(gsb, c_pos, c_xmat, self.height, self.width, fovy, self.bg_img)
+
+    if self.asymmetric_obs:
+      obs = _jax_to_torch(self.env_state.obs["state"])
+      critic_obs = _jax_to_torch(self.env_state.obs["privileged_state"])
+      obs = {"state": obs, "privileged_state": critic_obs}
+    else:
+      obs = _jax_to_torch(self.env_state.obs)
+      obs = {"state": obs}
+      
+    # Add pixels to observation
+    if isinstance(obs, dict):
+        for i in range(self.env.mj_model.ncam):
+            obs[f'pixels/view_{i}'] = rgb[:, i]
+    else:
+        obs = {"state": obs}
+        for i in range(self.env.mj_model.ncam):
+            obs[f'pixels/view_{i}'] = rgb[:, i]
+            
+    return TensorDict(obs, batch_size=[self.num_envs])
