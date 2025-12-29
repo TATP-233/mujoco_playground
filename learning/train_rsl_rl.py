@@ -31,9 +31,11 @@ from mujoco_playground import registry
 from mujoco_playground import wrapper_torch
 from mujoco_playground.config import locomotion_params
 from mujoco_playground.config import manipulation_params
+from mujoco_playground._src.mjx_env import ROOT_PATH
 from rsl_rl.runners import OnPolicyRunner
 import torch
 import warp as wp
+
 
 try:
   import wandb  # pylint: disable=g-import-not-at-top
@@ -51,7 +53,9 @@ logging.set_verbosity(logging.WARNING)
 # Define flags similar to the JAX script
 _ENV_NAME = flags.DEFINE_string(
     "env_name",
-    "BerkeleyHumanoidJoystickFlatTerrain",
+    # "BerkeleyHumanoidJoystickFlatTerrain",
+    # "LeapCubeReorient",
+    "PandaPickCubeCartesian",
     (
         "Name of the environment. One of: "
         f"{', '.join(mujoco_playground.registry.ALL_ENVS)}"
@@ -73,7 +77,7 @@ _USE_WANDB = flags.DEFINE_boolean(
 )
 _SUFFIX = flags.DEFINE_string("suffix", None, "Suffix for the experiment name.")
 _SEED = flags.DEFINE_integer("seed", 1, "Random seed.")
-_NUM_ENVS = flags.DEFINE_integer("num_envs", 4096, "Number of parallel envs.")
+_NUM_ENVS = flags.DEFINE_integer("num_envs", 2, "Number of parallel envs.")
 _DEVICE = flags.DEFINE_string("device", "cuda:0", "Device for training.")
 _MULTI_GPU = flags.DEFINE_boolean(
     "multi_gpu", False, "If true, use multi-GPU training (distributed)."
@@ -86,7 +90,11 @@ _WP_KERNEL_CACHE_DIR = flags.DEFINE_string(
     "/tmp/wp_kernel_cache_playground",
     "Path to the WP kernel cache directory.",
 )
-
+_USE_GS = flags.DEFINE_boolean(
+    "use_gs",
+    False,
+    "If true, use Google Storage for loading/saving checkpoints.",
+)
 
 def get_rl_config(env_name: str) -> config_dict.ConfigDict:
   if env_name in registry.manipulation._envs:
@@ -163,11 +171,54 @@ def main(argv):
   def render_callback(_, state):
     render_trajectory.append(state)
 
+  if _USE_GS.value:
+
+    ASSETS_PATH = ROOT_PATH / "manipulation" / "franka_emika_panda" / "3dgs"
+    Reso = "224"
+    episode_length = int(4 / env_cfg.ctrl_dt)
+    # Pre-register body_gaussians to allow override
+    with env_cfg.unlocked():
+        env_cfg.vision_config.body_gaussians = config_dict.ConfigDict()
+        env_cfg.vision_config.background = None
+
+    config_overrides = {
+        "episode_length": episode_length,
+        "vision": True,
+        "obs_noise.brightness": [0.75, 2.0],
+        "vision_config.render_batch_size": num_envs,
+        "vision_config.render_width": 64,
+        "vision_config.render_height": 64,
+        "vision_config.background" : (ASSETS_PATH / "ribbon.ply").as_posix(),
+        "vision_config.body_gaussians": {
+            "link0"         : (ASSETS_PATH / Reso / "link0.ply").as_posix(),
+            "link1"         : (ASSETS_PATH / Reso / "link1.ply").as_posix(),
+            "link2"         : (ASSETS_PATH / Reso / "link2.ply").as_posix(),
+            "link3"         : (ASSETS_PATH / Reso / "link3.ply").as_posix(),
+            "link4"         : (ASSETS_PATH / Reso / "link4.ply").as_posix(),
+            "link5"         : (ASSETS_PATH / Reso / "link5.ply").as_posix(),
+            "link6"         : (ASSETS_PATH / Reso / "link6.ply").as_posix(),
+            "link7"         : (ASSETS_PATH / Reso / "link7.ply").as_posix(),
+            "hand"          : (ASSETS_PATH / Reso / "hand.ply").as_posix(),
+            "left_finger"   : (ASSETS_PATH / Reso / "left_finger.ply").as_posix(),
+            "right_finger"  : (ASSETS_PATH / Reso / "right_finger.ply").as_posix(),
+            "box"           : (ASSETS_PATH / "red_cube.ply").as_posix(),
+        },
+        "box_init_range": 0.1, # +- 10 cm
+        "action_history_length": 5,
+        "success_threshold": 0.03,
+        "impl": "jax",
+    }
+    brax_env_cls = wrapper_torch.BatchSplatWrapper
+  else:
+    config_overrides = {"impl": "jax"}
+    brax_env_cls = wrapper_torch.RSLRLBraxWrapper
+
   # Create the environment
   raw_env = registry.load(
-      _ENV_NAME.value, config=env_cfg, config_overrides={"impl": "jax"}
+      _ENV_NAME.value, config=env_cfg, config_overrides=config_overrides
   )
-  brax_env = wrapper_torch.RSLRLBraxWrapper(
+
+  brax_env = brax_env_cls(
       raw_env,
       num_envs,
       _SEED.value,
