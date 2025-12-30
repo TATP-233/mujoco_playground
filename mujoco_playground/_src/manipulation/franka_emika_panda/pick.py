@@ -47,15 +47,18 @@ def default_config() -> config_dict.ConfigDict:
               # Gripper goes to the box.
               gripper_box=4.0,
               # Box goes to the target mocap.
-              box_target=8.0,
+              box_target=10., #8.0,
               # Do not collide the gripper with the floor.
               no_floor_collision=0.25,
               # Arm stays close to target pose.
-              robot_target_qpos=0.3,
-          )
+              robot_target_qpos=0.015, #0.3
+          ),
+          lifted_reward=0.5,
+          success_reward=2.0,
       ),
       vision=False,
       vision_config=default_vision_config(),
+      success_threshold=0.05,
       impl='jax',
       nconmax=24 * 2048,
       njmax=128,
@@ -158,6 +161,12 @@ class PandaPickCube(panda.PandaBase):
         "out_of_bounds": jp.array(0.0, dtype=float),
         **{k: 0.0 for k in self._config.reward_config.scales.keys()},
     }
+    if self._vision:
+       metrics.update({
+           'reward/lifted': jp.array(0.0, dtype=float),
+           'reward/success': jp.array(0.0, dtype=float),
+       })
+
     info = {"rng": rng, "target_pos": target_pos, "reached_box": 0.0}
     if self._vision:
         obs = self._get_obs_vision(data, info)
@@ -187,8 +196,20 @@ class PandaPickCube(panda.PandaBase):
         k: v * self._config.reward_config.scales[k]
         for k, v in raw_rewards.items()
     }
+
     reward = jp.clip(sum(rewards.values()), -1e4, 1e4)
-    box_pos = data.xpos[self._obj_body]
+    if self._vision:
+        # Sparse rewards
+        box_pos = data.xpos[self._obj_body]
+        lifted = (box_pos[2] > 0.05) * self._config.reward_config.lifted_reward
+        reward += lifted
+        success = self._get_success(data, state.info)
+        reward += success * self._config.reward_config.success_reward
+        state.metrics.update({
+            'reward/lifted': lifted.astype(float),
+            'reward/success': success.astype(float),
+        })
+
     out_of_bounds = jp.any(jp.abs(box_pos) > 1.0)
     out_of_bounds |= box_pos[2] < 0.0
     done = out_of_bounds | jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
@@ -205,6 +226,11 @@ class PandaPickCube(panda.PandaBase):
     state = State(data, obs, reward, done, state.metrics, state.info)
 
     return state
+
+  def _get_success(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
+    box_pos = data.xpos[self._obj_body]
+    target_pos = info['target_pos']
+    return jp.linalg.norm(box_pos - target_pos) < self._config.success_threshold
 
   def _get_reward(self, data: mjx.Data, info: Dict[str, Any]) -> Dict[str, Any]:
     target_pos = info["target_pos"]

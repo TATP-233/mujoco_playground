@@ -77,7 +77,8 @@ dev = [
     "pytest-xdist",
 ]
 learning = [
-    "rsl-rl-lib>=3.0.0",
+    "rsl-rl-lib==3.1.2",
+    # "rsl-rl-lib>=3.0.0", 
     "wandb",
 ]
 all = [
