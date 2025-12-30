@@ -39,7 +39,7 @@ def default_config() -> config_dict.ConfigDict:
   config = config_dict.create(
       ctrl_dt=0.02,
       sim_dt=0.005,
-      episode_length=100, #150,
+      episode_length=150,
       action_repeat=1,
       action_scale=0.04,
       reward_config=config_dict.create(
@@ -57,7 +57,7 @@ def default_config() -> config_dict.ConfigDict:
       vision=False,
       vision_config=default_vision_config(),
       impl='jax',
-      nconmax=12*1024, #24 * 2048,
+      nconmax=24 * 2048,
       njmax=128,
   )
   return config
@@ -171,6 +171,11 @@ class PandaPickCube(panda.PandaBase):
   def step(self, state: State, action: jax.Array) -> State:
     delta = action * self._action_scale
     ctrl = state.data.ctrl + delta
+    if self._vision:
+        close_gripper = jp.where(delta[-1] < 0, 1.0, 0.0)
+        jaw_action = jp.where(close_gripper, -1.0, 1.0)
+        claw_delta = jaw_action * 0.02  # up to 2 cm movement per ctrl.
+        ctrl.at[7].add(claw_delta)
     ctrl = jp.clip(ctrl, self._lowers, self._uppers)
 
     data = mjx_env.step(self._mjx_model, state.data, ctrl, self.n_substeps)
@@ -259,20 +264,20 @@ class PandaPickCube(panda.PandaBase):
     return obs
 
   def _get_obs_vision(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
+    gripper_pos = data.site_xpos[self._gripper_site]
+    gripper_mat = data.site_xmat[self._gripper_site].ravel()
     target_mat = math.quat_to_mat(data.mocap_quat[self._mocap_target])
     obs = jp.concatenate([
         data.qpos[self._robot_qposadr],
         data.qvel[self._robot_qposadr],
-        data.xmat[self._obj_body].ravel()[3:],
-        data.xpos[self._obj_body] - data.site_xpos[self._gripper_site],
-        info["target_pos"] - data.xpos[self._obj_body],
-        target_mat.ravel()[:6] - data.xmat[self._obj_body].ravel()[:6],
+        gripper_pos,
+        gripper_mat[3:],
+        info["target_pos"],
+        target_mat.ravel()[:6],
         data.ctrl - data.qpos[self._robot_qposadr[:-1]],
     ])
 
     return obs
-      
-
 
 class PandaPickCubeOrientation(PandaPickCube):
   """Bring a box to a target and orientation."""

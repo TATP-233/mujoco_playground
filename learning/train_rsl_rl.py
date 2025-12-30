@@ -341,8 +341,15 @@ def main(argv):
     # BatchSplatWrapper's reset/step return TensorDict, not jax state
     obs_torch = eval_env.reset()
     rollout = [eval_env.env_state]
-    # Capture initial frame
-    pixel_frames = [obs_torch["pixels/view_0"].cpu().numpy()]
+    
+    # Capture initial frame with all views
+    pixel_keys = sorted([k for k in obs_torch.keys() if k.startswith("pixels/view_")])
+    def get_pixel_frame(obs_td):
+      # Stack all views: [num_envs, num_cameras, H, W, 3]
+      imgs = [obs_td[k].cpu().numpy() for k in pixel_keys]
+      return np.stack(imgs, axis=1)
+    
+    pixel_frames = [get_pixel_frame(obs_torch)]
   else:
     jit_reset = jax.jit(eval_env.reset)
     jit_step = jax.jit(eval_env.step)
@@ -360,7 +367,7 @@ def main(argv):
     if _VISION.value:
       obs_torch, reward, done, info = eval_env.step(actions)
       rollout.append(eval_env.env_state)
-      pixel_frames.append(obs_torch["pixels/view_0"].cpu().numpy())
+      pixel_frames.append(get_pixel_frame(obs_torch))
       if done.any():
         break
     else:
@@ -387,7 +394,14 @@ def main(argv):
 
   if _VISION.value:
     d = int(np.sqrt(num_envs))
-    frames = [tile(f, d) for f in pixel_frames[::render_every]]
+    processed_frames = []
+    for f in pixel_frames[::render_every]:
+      # f shape: [num_envs, num_cameras, H, W, 3]
+      # Concatenate all cameras horizontally for each environment: [num_envs, H, num_cameras * W, 3]
+      f_combined = np.concatenate([f[:, i] for i in range(f.shape[1])], axis=2)
+      # Tile these environment-wide horizontal strips into a grid: [d*H, d*(num_cameras*W), 3]
+      processed_frames.append(tile(f_combined, d))
+    frames = processed_frames
   else:
     traj = rollout[::render_every]
     frames = base_eval_env.render(
