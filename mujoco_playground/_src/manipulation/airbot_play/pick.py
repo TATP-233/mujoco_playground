@@ -171,8 +171,6 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         mocap_quat=data.mocap_quat.at[self._mocap_target, :].set(target_quat),
     )
 
-    data = mjx.forward(self._mjx_model, data)
-
     # initialize env state and info
     metrics = {
         "out_of_bounds": jp.array(0.0, dtype=float),
@@ -226,13 +224,12 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
             'reward/success': success.astype(float),
         })
 
-    box_pos = data.xpos[self._obj_body]
     out_of_bounds = jp.any(jp.abs(box_pos) > 1.0)
     out_of_bounds |= box_pos[2] < 0.0
-    done = out_of_bounds | jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any() | jp.isnan(reward)
+    done = out_of_bounds | jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
     done = done.astype(float)
 
-    reward = jp.where(jp.isnan(reward), -1e4, reward)
+    # reward = jp.where(jp.isnan(reward), -1e4, reward)
 
     state.metrics.update(
         **raw_rewards, out_of_bounds=out_of_bounds.astype(float)

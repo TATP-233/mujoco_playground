@@ -172,7 +172,7 @@ class PandaPickCube(panda.PandaBase):
         obs = self._get_obs_vision(data, info)
     else:
         obs = self._get_obs(data, info)
-      
+
     reward, done = jp.zeros(2)
     state = State(data, obs, reward, done, metrics, info)
     return state
