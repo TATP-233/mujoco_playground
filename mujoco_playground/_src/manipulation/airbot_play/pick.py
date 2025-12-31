@@ -13,6 +13,14 @@ from mujoco_playground._src.mjx_env import State
 import numpy as np
 
 
+def default_vision_config() -> config_dict.ConfigDict:
+  return config_dict.create(
+      render_batch_size=1024,
+      render_width=64,
+      render_height=64,
+  )
+
+
 def default_config() -> config_dict.ConfigDict:
   """Returns the default config for bring_to_target tasks."""
   config = config_dict.create(
@@ -31,8 +39,13 @@ def default_config() -> config_dict.ConfigDict:
               no_floor_collision=0.25,
               # Arm stays close to target pose.
               robot_target_qpos=0.1,
-          )
+          ),
+          lifted_reward=0.5,
+          success_reward=2.0,
       ),
+      vision=False,
+      vision_config=default_vision_config(),
+      success_threshold=0.05,
       impl='jax',
       nconmax=24 * 2048,
       njmax=128,
@@ -49,6 +62,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
       config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
       sample_orientation: bool = False,
   ):
+    self._vision = config.vision
+
     xml_path = (
         mjx_env.ROOT_PATH
         / "manipulation"
@@ -147,6 +162,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         nconmax=self._config.nconmax,
         njmax=self._config.njmax,
     )
+    if self._vision:
+        data = mjx.forward(self._mjx_model, data)
 
     # set target mocap position
     data = data.replace(
@@ -161,8 +178,18 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         "out_of_bounds": jp.array(0.0, dtype=float),
         **{k: 0.0 for k in self._config.reward_config.scales.keys()},
     }
+    if self._vision:
+       metrics.update({
+           'reward/lifted': jp.array(0.0, dtype=float),
+           'reward/success': jp.array(0.0, dtype=float),
+       })
+
     info = {"rng": rng, "target_pos": target_pos, "reached_box": 0.0}
-    obs = self._get_obs(data, info)
+    if self._vision:
+        obs = self._get_obs_vision(data, info)
+    else:
+        obs = self._get_obs(data, info)
+
     reward, done = jp.zeros(2)
     state = State(data, obs, reward, done, metrics, info)
     return state
@@ -170,10 +197,16 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
   def step(self, state: State, action: jax.Array) -> State:
     delta = action * self._action_scale
     ctrl = state.data.ctrl + delta
+    if self._vision:
+        close_gripper = jp.where(delta[-1] < 0, 1.0, 0.0)
+        jaw_action = jp.where(close_gripper, -1.0, 1.0)
+        claw_delta = jaw_action * 0.02  # up to 2 cm movement per ctrl.
+        ctrl.at[7].add(claw_delta)
     ctrl = jp.clip(ctrl, self._lowers, self._uppers)
 
     data = mjx_env.step(self._mjx_model, state.data, ctrl, self.n_substeps)
-    data = mjx.forward(self._mjx_model, data)
+    if self._vision:
+        data = mjx.forward(self._mjx_model, data)
 
     raw_rewards = self._get_reward(data, state.info)
     rewards = {
@@ -181,6 +214,18 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         for k, v in raw_rewards.items()
     }
     reward = jp.clip(sum(rewards.values()), -1e4, 1e4)
+    if self._vision:
+        # Sparse rewards
+        box_pos = data.xpos[self._obj_body]
+        lifted = (box_pos[2] > 0.05) * self._config.reward_config.lifted_reward
+        reward += lifted
+        success = self._get_success(data, state.info)
+        reward += success * self._config.reward_config.success_reward
+        state.metrics.update({
+            'reward/lifted': lifted.astype(float),
+            'reward/success': success.astype(float),
+        })
+
     box_pos = data.xpos[self._obj_body]
     out_of_bounds = jp.any(jp.abs(box_pos) > 1.0)
     out_of_bounds |= box_pos[2] < 0.0
@@ -193,10 +238,18 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         **raw_rewards, out_of_bounds=out_of_bounds.astype(float)
     )
 
-    obs = self._get_obs(data, state.info)
+    if self._vision:
+        obs = self._get_obs_vision(data, state.info)
+    else:
+        obs = self._get_obs(data, state.info)
     state = State(data, obs, reward, done, state.metrics, state.info)
 
     return state
+
+  def _get_success(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
+    box_pos = data.xpos[self._obj_body]
+    target_pos = info['target_pos']
+    return jp.linalg.norm(box_pos - target_pos) < self._config.success_threshold
 
   def _get_reward(self, data: mjx.Data, info: Dict[str, Any]) -> Dict[str, Any]:
     target_pos = info["target_pos"]
@@ -250,6 +303,22 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         data.xpos[self._obj_body] - data.site_xpos[self._gripper_site],
         info["target_pos"] - data.xpos[self._obj_body],
         target_mat.ravel()[:6] - data.xmat[self._obj_body].ravel()[:6],
+        data.ctrl - data.qpos[self._robot_qposadr[:-1]],
+    ])
+
+    return obs
+
+  def _get_obs_vision(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
+    gripper_pos = data.site_xpos[self._gripper_site]
+    gripper_mat = data.site_xmat[self._gripper_site].ravel()
+    target_mat = math.quat_to_mat(data.mocap_quat[self._mocap_target])
+    obs = jp.concatenate([
+        data.qpos[self._robot_qposadr],
+        data.qvel[self._robot_qposadr],
+        gripper_pos,
+        gripper_mat[3:],
+        info["target_pos"],
+        target_mat.ravel()[:6],
         data.ctrl - data.qpos[self._robot_qposadr[:-1]],
     ])
 

@@ -6,3 +6,6 @@ MUJOCO_LOG.TXT
 mujoco_menagerie
 checkpoints/
 logs
+3dgs/
+rslrl-training-logs/
+assets/

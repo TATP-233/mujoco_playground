@@ -129,21 +129,34 @@ def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int
   env_cfg.vision_config.render_width = 64
   env_cfg.vision_config.render_height = 64
   
+  from mujoco_playground._src import mjx_env
+  from ml_collections import ConfigDict
+  reso = "224"
+  
+  gaussians_name = {}
   if "Panda" in env_name:
-    from mujoco_playground._src import mjx_env
-    from ml_collections import ConfigDict
-    reso = "224"
-    assets_path = mjx_env.ROOT_PATH / "manipulation" / "franka_emika_panda" / "3dgs"
+    assets_name = "franka_emika_panda"
     bodies = ["link0", "link1", "link2", "link3", "link4", "link5", "link6", "link7", "hand", "left_finger", "right_finger"]
-    body_gaussians = {b: (assets_path / reso / f"{b}.ply").as_posix() for b in bodies}
     if env_name == "PandaPickCubeCartesian":
-      env_cfg.vision_config.background = (assets_path / "ribbon.ply").as_posix()
-      body_gaussians["box"] = (assets_path / "red_cube.ply").as_posix()
+      background_name = "ribbon.ply"
+      gaussians_name["box"] = "red_cube.ply"
     elif env_name == "PandaPickCube":
-      env_cfg.vision_config.background = (assets_path / "ribbon_blue.ply").as_posix()
-      body_gaussians["box"] = (assets_path / "green_cube.ply").as_posix()
-    env_cfg.vision_config.body_gaussians = ConfigDict(body_gaussians)
+      background_name = "ribbon_blue.ply"
+      gaussians_name["box"] = "green_cube.ply"
+  elif "AirbotPlay" in env_name:
+    assets_name = "airbot_play"
+    bodies = ["arm_base", "link1", "link2", "link3", "link4", "link5", "link6", "left", "right"]
+    background_name = "ribbon_blue.ply"
+    gaussians_name["box"] = "green_cube.ply"
 
+  assets_path = mjx_env.ROOT_PATH / "manipulation" / assets_name / "3dgs"
+  body_gaussians = {b: (assets_path / reso / f"{b}.ply").as_posix() for b in bodies}
+  
+  env_cfg.vision_config.background = (assets_path / background_name).as_posix()
+  for k, v in gaussians_name.items():
+    body_gaussians[k] = (assets_path / v).as_posix()
+
+  env_cfg.vision_config.body_gaussians = ConfigDict(body_gaussians)
 
 def main(argv):
   """Run training and evaluation for the specified environment using RSL-RL."""
