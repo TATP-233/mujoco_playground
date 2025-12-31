@@ -9,3 +9,4 @@ logs
 3dgs/
 rslrl-training-logs/
 assets/
+mujoco_playground/experimental/madrona_benchmarking/get_data.sh
