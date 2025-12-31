@@ -49,7 +49,7 @@ class ActorCriticCNN(ActorCritic):
       num_actions: int,
       **kwargs,
   ) -> None:
-    self.cnn_output_size = 256
+    self.cnn_output_size = 16
     
     # Create a dummy observation with 1D features for the base class initialization
     dummy_obs_dict = {}
@@ -74,8 +74,8 @@ class ActorCriticCNN(ActorCritic):
     has_pixels_policy = any(g.startswith("pixels/") for g in obs_groups["policy"])
     has_pixels_critic = any(g.startswith("pixels/") for g in obs_groups["critic"])
     
-    self.encoder = CNNEncoder() if has_pixels_policy else None
-    self.critic_encoder = CNNEncoder() if has_pixels_critic else None
+    self.encoder = CNNEncoder(output_size=self.cnn_output_size) if has_pixels_policy else None
+    self.critic_encoder = CNNEncoder(output_size=self.cnn_output_size) if has_pixels_critic else None
 
   def _process_obs_list(self, obs: TensorDict, group_names: list[str], encoder: nn.Module = None) -> torch.Tensor:
     obs_list = []

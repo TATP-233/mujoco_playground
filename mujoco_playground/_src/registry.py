@@ -62,6 +62,7 @@ def load(
 
 
 def get_domain_randomizer(env_name: str) -> Optional[DomainRandomizer]:
+  print(f"Getting domain randomizer for {env_name}")
   if env_name in manipulation.ALL_ENVS:
     return manipulation.get_domain_randomizer(env_name)
 

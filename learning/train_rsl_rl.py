@@ -96,7 +96,7 @@ _WP_KERNEL_CACHE_DIR = flags.DEFINE_string(
     "Path to the WP kernel cache directory.",
 )
 _VISION = flags.DEFINE_boolean("vision", False, "Use vision input.")
-
+_USE_DR = flags.DEFINE_boolean("use_dr", False, "Use domain randomization.")
 
 def get_rl_config(env_name: str) -> config_dict.ConfigDict:
   if env_name in registry.manipulation._envs:
@@ -221,7 +221,7 @@ def main(argv):
     json.dump(env_cfg.to_dict(), fp, indent=4)
 
   # Domain randomization
-  randomizer = registry.get_domain_randomizer(_ENV_NAME.value)
+  randomizer = registry.get_domain_randomizer(_ENV_NAME.value) if _USE_DR.value else None
 
   # We'll store environment states during rendering
   render_trajectory = []

@@ -31,6 +31,7 @@ from mujoco_playground._src.manipulation.leap_hand import rotate_z as leap_rotat
 from mujoco_playground._src.manipulation.aero_hand import rotate_z as aero_hand_rotate_z
 from mujoco_playground._src.manipulation.airbot_play import pick as airbot_pick
 from mujoco_playground._src.manipulation.universal_robots_ur5e_robotiq import pick as ur5e_pick
+from mujoco_playground._src.manipulation.franka_emika_panda import randomize_3dgs
 
 _envs = {
     "AlohaHandOver": aloha_handover.HandOver,
@@ -66,6 +67,8 @@ _randomizer = {
     "LeapCubeRotateZAxis": leap_rotate_z.domain_randomize,
     "LeapCubeReorient": leap_cube_reorient.domain_randomize,
     "AeroCubeRotateZAxis": aero_hand_rotate_z.domain_randomize,
+    "AirbotPlayPickCube": randomize_3dgs.domain_randomize,
+    "PandaPickCube": randomize_3dgs.domain_randomize,
 }
 
 
