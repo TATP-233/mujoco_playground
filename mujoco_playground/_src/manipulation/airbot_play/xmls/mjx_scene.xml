@@ -1,5 +1,6 @@
 <mujoco model="airbot_play scene">
-  <include file="mjx_airbot_play.xml"/>
+  <!-- <include file="mjx_airbot_play.xml"/> -->
+  <include file="mjx_airbot_play_gravcomp.xml"/>
 
   <statistic center="0.3 0 0.4" extent="1"/>
 

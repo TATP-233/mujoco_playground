@@ -76,7 +76,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         config,
         config_overrides,
     )
-    self._post_init(obj_name="box", keyframe="home")
+    self._post_init(obj_name="box", keyframe="init")
     self._sample_orientation = sample_orientation
 
     # Contact sensor IDs.
