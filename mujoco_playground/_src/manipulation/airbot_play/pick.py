@@ -34,11 +34,11 @@ def default_config() -> config_dict.ConfigDict:
               # Gripper goes to the box.
               gripper_box=4.0,
               # Box goes to the target mocap.
-              box_target=30.0,
+              box_target=10., #8.0,
               # Do not collide the gripper with the floor.
               no_floor_collision=0.25,
               # Arm stays close to target pose.
-              robot_target_qpos=0.1,
+              robot_target_qpos=0.015, #0.3
           ),
           lifted_reward=0.5,
           success_reward=2.0,
@@ -126,6 +126,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         )
         + self._init_obj_pos
     )
+    # box_pos = self._init_obj_pos
 
     # initialize target position
     target_pos = (
@@ -196,10 +197,9 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     delta = action * self._action_scale
     ctrl = state.data.ctrl + delta
     if self._vision:
-        close_gripper = jp.where(delta[-1] < 0, 1.0, 0.0)
-        jaw_action = jp.where(close_gripper, -1.0, 1.0)
+        jaw_action = jp.where(delta[-1] < 0, -1.0, 1.0)
         claw_delta = jaw_action * 0.02  # up to 2 cm movement per ctrl.
-        ctrl.at[7].add(claw_delta)
+        ctrl.at[-1].add(claw_delta)
     ctrl = jp.clip(ctrl, self._lowers, self._uppers)
 
     data = mjx_env.step(self._mjx_model, state.data, ctrl, self.n_substeps)
