@@ -326,7 +326,25 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
     b_quat = _jax_to_torch(self.env_state.data.xquat)
     c_pos = _jax_to_torch(self.env_state.data.cam_xpos)
     c_xmat = _jax_to_torch(self.env_state.data.cam_xmat)
-    
+
+    # === 调试信息开始 ===
+    if hasattr(self, 'num_envs') or c_pos.shape[0] > 1:
+        # 计算第一个和第二个 World 的相机位置差异
+        diff = torch.abs(c_pos[0] - c_pos[1]).max()
+        # 计算所有 World 之间位置的标准差
+        std_val = torch.std(c_pos, dim=0).mean()
+        
+        print(f"\n[渲染器输入检查]")
+        print(f"c_pos 形状: {c_pos.shape}") # 预期 (64, 2, 3)
+        print(f"World 0 与 World 1 最大位置差值: {diff.item():.6f}")
+        print(f"所有环境相机位置的平均标准差: {std_val.item():.6f}")
+        
+        if diff < 1e-6:
+            print("❌ 警告：渲染器输入的 c_pos 在不同 World 之间完全相同！渲染画面将不会有区别。")
+        else:
+            print("✅ 确认：渲染器输入的 c_pos 已具备随机差异。")
+    # === 调试信息结束 ===
+
     gsb = self.renderer.batch_update_gaussians(b_pos, b_quat)
     rgb, _ = self.renderer.batch_env_render(gsb, c_pos, c_xmat, self.height, self.width, self.fovy_np, self.bg_img)
     
@@ -384,7 +402,6 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
 
   def reset(self):
     self.env_state = self.reset_fn(self.key_reset)
-    
     # Render initial state
     b_pos = _jax_to_torch(self.env_state.data.xpos)
     b_quat = _jax_to_torch(self.env_state.data.xquat)

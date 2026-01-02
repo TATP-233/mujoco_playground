@@ -1,27 +1,10 @@
-# Copyright 2025 DeepMind Technologies Limited
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
 """Randomization functions."""
 from typing import Tuple
-
 import jax
 import jax.numpy as jnp
 from mujoco import mjx
 from mujoco.mjx._src import math
-import numpy as np
 
-from mujoco_playground._src.manipulation.franka_emika_panda import pick_cartesian
 
 def perturb_orientation(
     key: jax.Array, original: jax.Array, deg: float
@@ -63,57 +46,72 @@ def perturb_orientation(
 def domain_randomize(
     mjx_model: mjx.Model, num_worlds: int = None, rng=None
 ) -> Tuple[mjx.Model, mjx.Model]:
-  """支持多相机的域随机化，适配 Madrona BatchRenderer。"""
   
-  # 设置 in_axes，确保渲染器知道这些属性是按 batch (num_worlds) 划分的
   in_axes = jax.tree_util.tree_map(lambda x: None, mjx_model)
   in_axes = in_axes.tree_replace({
       'cam_pos': 0,
       'cam_quat': 0,
   })
   
-  # if rng is None:
-  #   rng = jax.random.key(0)
-  if num_worlds is None:
-    assert rng is not None
-  else:
-    rng = jax.random.split(jax.random.key(0), num_worlds)
-
-  num_cams = mjx_model.ncam  # 获取模型中的相机总数
+  # 确保 rng 是有效的 batch key
+  if num_worlds is not None:
+    # 建议从外部传入变化的 rng，或者这里使用一个不同的 key
+    rng = jax.random.split(jax.random.key(42), num_worlds) 
+  print(f"{num_worlds=}")
+  num_cams = mjx_model.ncam
 
   @jax.vmap
-  def rand(rng: jax.Array):
-    """为单张地图中的所有相机生成随机化字段。"""
-    _, key = jax.random.split(rng, 2)
-
-    #### 多相机随机化 ####
-    key_pos, key_ori = jax.random.split(key, 2)
+  def rand(single_rng: jax.Array):
+    # 使用唯一的 key
+    key_pos, key_ori = jax.random.split(single_rng, 2)
     
-    # 1. 位置随机化: 生成 (num_cams, 3) 的偏移量
+    # 【调试】极大化随机范围，确保肉眼可见
     cam_offsets = jax.random.uniform(
-        key_pos, (num_cams, 3), minval=-0.05, maxval=0.05
+        key_pos, (num_cams, 3), minval=-0.5, maxval=0.5 # 增加到 50cm
     )
-    cam_pos = mjx_model.cam_pos + cam_offsets
+    # 显式确保我们在原始位置上叠加
+    new_cam_pos = mjx_model.cam_pos + cam_offsets
 
-    # 2. 姿态随机化: 使用 vmap 处理每一个相机
-    # 假设 perturb_orientation 接受 (key, quat, degrees)
     keys_ori = jax.random.split(key_ori, num_cams)
-    
-    # 向量化处理所有相机的旋转
-    cam_quat = jax.vmap(perturb_orientation, in_axes=(0, 0, None))(
-        keys_ori, mjx_model.cam_quat, 10
+    new_cam_quat = jax.vmap(perturb_orientation, in_axes=(0, 0, None))(
+        keys_ori, mjx_model.cam_quat, 30 # 增加到 30 度
     )
+    return new_cam_pos, new_cam_quat
 
-    return cam_pos, cam_quat
-
-  # 针对所有 world 进行并行计算
-  # 结果形状: cam_pos -> (num_worlds, num_cams, 3), cam_quat -> (num_worlds, num_cams, 4)
   cam_pos, cam_quat = rand(rng)
 
-  # 替换模型中的字段
+  # 调试：打印第一个和第二个 world 的相机位置，看数据是否真的不同
+  jax.debug.print("World 0 Cam Pos: {x}", x=cam_pos[0])
+  jax.debug.print("World 1 Cam Pos: {x}", x=cam_pos[1])
+  jax.debug.print("num cam_pos: {x}", x=len(cam_pos))
+
   mjx_model = mjx_model.tree_replace({
     'cam_pos': cam_pos,
     'cam_quat': cam_quat,
   })
+  
+  # --- 开始打印检查 ---
+  print("\n" + "="*30)
+  print("PyTree 结构检查 (编译时):")
+  print(f"Model cam_pos 形状: {mjx_model.cam_pos.shape}") 
+  # 预期: (num_worlds, num_cams, 3)
+  print(f"Model cam_quat 形状: {mjx_model.cam_quat.shape}") 
+  # 预期: (num_worlds, num_cams, 4)
 
+  # 运行时检查具体数值 (确保不同 World 之间真的有差异)
+  def debug_check(pos, quat):
+    # 打印前两个世界的第一个相机位姿进行对比
+    jax.debug.print("--- 运行时随机化数值校验 ---")
+    jax.debug.print("World 0 - Cam 0 Pos: {x}", x=pos[0, 0])
+    jax.debug.print("World 1 - Cam 0 Pos: {x}", x=pos[1, 0])
+    
+    # 计算所有世界相机位置的标准差，如果 > 0 说明确实存在随机化
+    pos_std = jnp.std(pos)
+    jax.debug.print("所有世界相机位置的样本标准差: {std} (应 > 0)", std=pos_std)
+
+  debug_check(mjx_model.cam_pos, mjx_model.cam_quat)
+  print("="*30 + "\n")
+  # --- 结束打印检查 ---
+
+  print("use dr!")
   return mjx_model, in_axes

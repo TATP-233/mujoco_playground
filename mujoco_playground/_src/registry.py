@@ -68,5 +68,5 @@ def get_domain_randomizer(env_name: str) -> Optional[DomainRandomizer]:
 
   if env_name in locomotion.ALL_ENVS:
     return locomotion.get_domain_randomizer(env_name)
-
+  print("No dr found")
   return None
