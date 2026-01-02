@@ -98,6 +98,20 @@ class PandaPickCube(panda.PandaBase):
         for geom in ["left_finger_pad", "right_finger_pad", "hand_capsule"]
     ]
 
+  def _post_forward_vision(self, data: mjx.Data) -> mjx.Data:
+    # Workaround: Explicitly update cam_xpos/xmat for cameras attached to world
+    # to ensure domain randomization of camera pose is reflected.
+    cam_bodyid = jp.array(self._mj_model.cam_bodyid)
+    is_world = cam_bodyid == 0
+    
+    new_cam_xpos = jp.where(is_world[:, None], self._mjx_model.cam_pos, data.cam_xpos)
+    new_cam_xmat = jp.where(
+        is_world[:, None, None], 
+        math.quat_to_mat(self._mjx_model.cam_quat), 
+        data.cam_xmat
+    )
+    return data.replace(cam_xpos=new_cam_xpos, cam_xmat=new_cam_xmat)
+
   def reset(self, rng: jax.Array) -> State:
     rng, rng_box, rng_target = jax.random.split(rng, 3)
 
@@ -149,6 +163,7 @@ class PandaPickCube(panda.PandaBase):
     )
     if self._vision:
         data = mjx.forward(self._mjx_model, data)
+        data = self._post_forward_vision(data)
 
     # set target mocap position
     data = data.replace(
@@ -190,6 +205,7 @@ class PandaPickCube(panda.PandaBase):
     data = mjx_env.step(self._mjx_model, state.data, ctrl, self.n_substeps)
     if self._vision:
         data = mjx.forward(self._mjx_model, data)
+        data = self._post_forward_vision(data)
 
     raw_rewards = self._get_reward(data, state.info)
     rewards = {
