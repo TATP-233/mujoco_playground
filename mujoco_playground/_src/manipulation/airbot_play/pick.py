@@ -195,11 +195,10 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
   def step(self, state: State, action: jax.Array) -> State:
     delta = action * self._action_scale
-    ctrl = state.data.ctrl + delta
     if self._vision:
-        jaw_action = jp.where(delta[-1] < 0, -1.0, 1.0)
-        claw_delta = jaw_action * 0.02  # up to 2 cm movement per ctrl.
-        ctrl.at[-1].add(claw_delta)
+        jaw_delta = 0.02  # up to 2 cm movement per ctrl.
+        delta = delta.at[-1].set(jp.where(delta[-1] < 0, -jaw_delta, jaw_delta))
+    ctrl = state.data.ctrl + delta
     ctrl = jp.clip(ctrl, self._lowers, self._uppers)
 
     data = mjx_env.step(self._mjx_model, state.data, ctrl, self.n_substeps)
