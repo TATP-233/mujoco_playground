@@ -34,11 +34,11 @@ def default_config() -> config_dict.ConfigDict:
               # Gripper goes to the box.
               gripper_box=4.0,
               # Box goes to the target mocap.
-              box_target=30.0,
+              box_target=10.0,
               # Do not collide the gripper with the floor.
-              no_floor_collision=0.25,
+              no_floor_collision=10.0,
               # Arm stays close to target pose.
-              robot_target_qpos=0.1,
+              robot_target_qpos=0.015,
           ),
           lifted_reward=0.5,
           success_reward=2.0,
@@ -195,11 +195,11 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
   def step(self, state: State, action: jax.Array) -> State:
     delta = action * self._action_scale
     ctrl = state.data.ctrl + delta
-    if self._vision:
-        close_gripper = jp.where(delta[-1] < 0, 1.0, 0.0)
-        jaw_action = jp.where(close_gripper, -1.0, 1.0)
-        claw_delta = jaw_action * 0.02  # up to 2 cm movement per ctrl.
-        ctrl.at[7].add(claw_delta)
+    # if self._vision:
+    #     close_gripper = jp.where(delta[-1] < 0, 1.0, 0.0)
+    #     jaw_action = jp.where(close_gripper, -1.0, 1.0)
+    #     claw_delta = jaw_action * 0.02  # up to 2 cm movement per ctrl.
+    #     ctrl.at[7].add(claw_delta)
     ctrl = jp.clip(ctrl, self._lowers, self._uppers)
 
     data = mjx_env.step(self._mjx_model, state.data, ctrl, self.n_substeps)
@@ -250,7 +250,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
   def _get_reward(self, data: mjx.Data, info: Dict[str, Any]) -> Dict[str, Any]:
     target_pos = info["target_pos"]
-    box_pos = data.xpos[self._obj_body]
+    box_pos = data.xpos[self._obj_body].at[2].add(0.02)
     gripper_pos = data.site_xpos[self._gripper_site]
     pos_err = jp.linalg.norm(target_pos - box_pos)
     box_mat = data.xmat[self._obj_body]
