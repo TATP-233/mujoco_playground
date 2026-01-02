@@ -39,6 +39,12 @@ def default_config() -> config_dict.ConfigDict:
               no_floor_collision=0.25,
               # Arm stays close to target pose.
               robot_target_qpos=0.015, #0.3
+              # Gripper stays open when approaching the box.
+              gripper_open=2.0,
+              # Gripper closes when close to the box.
+              gripper_close=10.0,
+              # Lift the box.
+              lift=2.0,
           ),
           lifted_reward=0.5,
           success_reward=2.0,
@@ -214,12 +220,12 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     if self._vision:
         # Sparse rewards
         box_pos = data.xpos[self._obj_body]
-        lifted = (box_pos[2] > 0.03) * self._config.reward_config.lifted_reward
-        reward += lifted
+        # lifted = (box_pos[2] > 0.03) * self._config.reward_config.lifted_reward
+        # reward += lifted
         success = self._get_success(data, state.info)
         reward += success * self._config.reward_config.success_reward
         state.metrics.update({
-            'reward/lifted': lifted.astype(float),
+            # 'reward/lifted': lifted.astype(float),
             'reward/success': success.astype(float),
         })
 
@@ -257,7 +263,10 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     rot_err = jp.linalg.norm(target_mat.ravel()[:6] - box_mat.ravel()[:6])
 
     box_target = 1 - jp.tanh(5 * (0.9 * pos_err + 0.1 * rot_err))
-    gripper_box = 1 - jp.tanh(5 * jp.linalg.norm(box_pos - gripper_pos))
+    
+    dist_to_box = jp.linalg.norm(box_pos - gripper_pos)
+    gripper_box = 1 - jp.tanh(5 * dist_to_box)
+    
     robot_target_qpos = 1 - jp.tanh(
         jp.linalg.norm(
             data.qpos[self._robot_arm_qposadr]
@@ -273,16 +282,29 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     floor_collision = sum(hand_floor_collision) > 0
     no_floor_collision = (1 - floor_collision).astype(float)
 
-    info["reached_box"] = 1.0 * jp.maximum(
-        info["reached_box"],
-        (jp.linalg.norm(box_pos - gripper_pos) < 0.012),
-    )
+    # Relaxed threshold for reaching the box
+    is_reached = dist_to_box < 0.012
+    info["reached_box"] = 1.0 * jp.maximum(info["reached_box"], is_reached)
+
+    # Encourage keeping gripper open when not yet reached the box
+    left_finger = data.qpos[self._robot_qposadr[-2]]
+    right_finger = data.qpos[self._robot_qposadr[-1]]
+    gripper_width = left_finger + right_finger
+    gripper_open = ((gripper_width > 0.035) * (~is_reached)).astype(float)
+    gripper_close = ((gripper_width < 0.025) * is_reached).astype(float)
+
+    # Explicit lift reward
+    lift = 1.0 - jp.tanh(5.0 * jp.abs(box_pos[2] - target_pos[2]))
+    lift = lift * info["reached_box"]
 
     rewards = {
         "gripper_box": gripper_box,
         "box_target": box_target * info["reached_box"],
         "no_floor_collision": no_floor_collision,
         "robot_target_qpos": robot_target_qpos,
+        "gripper_open": gripper_open,
+        "gripper_close": gripper_close,
+        "lift": lift,
     }
     return rewards
 

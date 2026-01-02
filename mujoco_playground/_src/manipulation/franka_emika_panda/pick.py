@@ -52,6 +52,12 @@ def default_config() -> config_dict.ConfigDict:
               no_floor_collision=0.25,
               # Arm stays close to target pose.
               robot_target_qpos=0.015, #0.3
+              # Gripper stays open when approaching the box.
+              gripper_open=2.0,
+              # Gripper closes when close to the box.
+              gripper_close=10.0,
+              # Lift the box.
+              lift=2.0,
           ),
           lifted_reward=0.5,
           success_reward=2.0,
@@ -106,19 +112,20 @@ class PandaPickCube(panda.PandaBase):
         jax.random.uniform(
             rng_box,
             (3,),
-            minval=jp.array([-0.2, -0.2, 0.0]),
-            maxval=jp.array([0.2, 0.2, 0.0]),
+            minval=jp.array([-0.1, -0.1, 0.0]),
+            maxval=jp.array([0.1, 0.1, 0.0]),
         )
         + self._init_obj_pos
     )
+    # box_pos = self._init_obj_pos
 
     # initialize target position
     target_pos = (
         jax.random.uniform(
             rng_target,
             (3,),
-            minval=jp.array([-0.2, -0.2, 0.2]),
-            maxval=jp.array([0.2, 0.2, 0.4]),
+            minval=jp.array([-0.1, -0.1, 0.1]),
+            maxval=jp.array([0.1, 0.1, 0.2]),
         )
         + self._init_obj_pos
     )
@@ -194,17 +201,16 @@ class PandaPickCube(panda.PandaBase):
         k: v * self._config.reward_config.scales[k]
         for k, v in raw_rewards.items()
     }
-
     reward = jp.clip(sum(rewards.values()), -1e4, 1e4)
     if self._vision:
         # Sparse rewards
         box_pos = data.xpos[self._obj_body]
-        lifted = (box_pos[2] > 0.05) * self._config.reward_config.lifted_reward
-        reward += lifted
+        # lifted = (box_pos[2] > 0.03) * self._config.reward_config.lifted_reward
+        # reward += lifted
         success = self._get_success(data, state.info)
         reward += success * self._config.reward_config.success_reward
         state.metrics.update({
-            'reward/lifted': lifted.astype(float),
+            # 'reward/lifted': lifted.astype(float),
             'reward/success': success.astype(float),
         })
 
@@ -212,6 +218,8 @@ class PandaPickCube(panda.PandaBase):
     out_of_bounds |= box_pos[2] < 0.0
     done = out_of_bounds | jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
     done = done.astype(float)
+
+    # reward = jp.where(jp.isnan(reward), -1e4, reward)
 
     state.metrics.update(
         **raw_rewards, out_of_bounds=out_of_bounds.astype(float)
@@ -240,7 +248,10 @@ class PandaPickCube(panda.PandaBase):
     rot_err = jp.linalg.norm(target_mat.ravel()[:6] - box_mat.ravel()[:6])
 
     box_target = 1 - jp.tanh(5 * (0.9 * pos_err + 0.1 * rot_err))
-    gripper_box = 1 - jp.tanh(5 * jp.linalg.norm(box_pos - gripper_pos))
+    
+    dist_to_box = jp.linalg.norm(box_pos - gripper_pos)
+    gripper_box = 1 - jp.tanh(5 * dist_to_box)
+    
     robot_target_qpos = 1 - jp.tanh(
         jp.linalg.norm(
             data.qpos[self._robot_arm_qposadr]
@@ -256,16 +267,29 @@ class PandaPickCube(panda.PandaBase):
     floor_collision = sum(hand_floor_collision) > 0
     no_floor_collision = (1 - floor_collision).astype(float)
 
-    info["reached_box"] = 1.0 * jp.maximum(
-        info["reached_box"],
-        (jp.linalg.norm(box_pos - gripper_pos) < 0.012),
-    )
+    # Relaxed threshold for reaching the box
+    is_reached = dist_to_box < 0.012
+    info["reached_box"] = 1.0 * jp.maximum(info["reached_box"], is_reached)
+
+    # Encourage keeping gripper open when not yet reached the box
+    left_finger = data.qpos[self._robot_qposadr[-2]]
+    right_finger = data.qpos[self._robot_qposadr[-1]]
+    gripper_width = left_finger + right_finger
+    gripper_open = ((gripper_width > 0.035) * (~is_reached)).astype(float)
+    gripper_close = ((gripper_width < 0.025) * is_reached).astype(float)
+
+    # Explicit lift reward
+    lift = 1.0 - jp.tanh(5.0 * jp.abs(box_pos[2] - target_pos[2]))
+    lift = lift * info["reached_box"]
 
     rewards = {
         "gripper_box": gripper_box,
         "box_target": box_target * info["reached_box"],
         "no_floor_collision": no_floor_collision,
         "robot_target_qpos": robot_target_qpos,
+        "gripper_open": gripper_open,
+        "gripper_close": gripper_close,
+        "lift": lift,
     }
     return rewards
 
