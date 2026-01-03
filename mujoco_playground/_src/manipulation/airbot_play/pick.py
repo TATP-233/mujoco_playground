@@ -36,7 +36,7 @@ def default_config() -> config_dict.ConfigDict:
               # Box goes to the target mocap.
               box_target=10.0,
               # Do not collide the gripper with the floor.
-              no_floor_collision=10.0,
+              no_floor_collision=0.25,
               # Arm stays close to target pose.
               robot_target_qpos=0.015,
           ),
