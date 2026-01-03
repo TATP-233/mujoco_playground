@@ -214,7 +214,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     reward = jp.clip(sum(rewards.values()), -1e4, 1e4)
     if self._vision:
         # Sparse rewards
-        box_pos = data.xpos[self._obj_body]
+        box_pos = self._get_box_pos(data)
         lifted = (box_pos[2] > 0.03) * self._config.reward_config.lifted_reward
         reward += lifted
         success = self._get_success(data, state.info)
@@ -244,13 +244,13 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     return state
 
   def _get_success(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
-    box_pos = data.xpos[self._obj_body]
+    box_pos = self._get_box_pos(data)
     target_pos = info['target_pos']
     return jp.linalg.norm(box_pos - target_pos) < self._config.success_threshold
 
   def _get_reward(self, data: mjx.Data, info: Dict[str, Any]) -> Dict[str, Any]:
     target_pos = info["target_pos"]
-    box_pos = data.xpos[self._obj_body].at[2].add(0.02)
+    box_pos = self._get_box_pos(data)
     gripper_pos = data.site_xpos[self._gripper_site]
     pos_err = jp.linalg.norm(target_pos - box_pos)
     box_mat = data.xmat[self._obj_body]
@@ -287,6 +287,9 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     }
     return rewards
 
+  def _get_box_pos(self, data: mjx.Data) -> jax.Array:
+    return data.xpos[self._obj_body].at[2].add(0.02)
+
   def _get_obs(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
     gripper_pos = data.site_xpos[self._gripper_site]
     gripper_mat = data.site_xmat[self._gripper_site].ravel()
@@ -297,8 +300,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         gripper_pos,
         gripper_mat[3:],
         data.xmat[self._obj_body].ravel()[3:],
-        data.xpos[self._obj_body] - data.site_xpos[self._gripper_site],
-        info["target_pos"] - data.xpos[self._obj_body],
+        self._get_box_pos(data) - data.site_xpos[self._gripper_site],
+        info["target_pos"] - self._get_box_pos(data),
         target_mat.ravel()[:6] - data.xmat[self._obj_body].ravel()[:6],
         data.ctrl - data.qpos[self._robot_qposadr[:-1]],
     ])
