@@ -220,7 +220,21 @@ def brax_vision_ppo_config(
       num_resets_per_eval=10,
   )
 
-  if env_name == "PandaPickCubeCartesian":
+  # if env_name == "PandaPickCubeCartesian":
+  if "PandaPickCube" in env_name:
+    rl_config.num_timesteps = 5_000_000
+    rl_config.num_evals = 5
+    rl_config.unroll_length = 10
+    rl_config.num_minibatches = 8
+    rl_config.num_updates_per_batch = 8
+    rl_config.discounting = 0.97
+    rl_config.learning_rate = 5.0e-4
+    rl_config.entropy_cost = 7.5e-3
+    rl_config.num_envs = 1024
+    rl_config.batch_size = 256
+    rl_config.reward_scaling = 0.1
+    rl_config.num_resets_per_eval = 1
+  elif "AirbotPlayPickCube" in env_name:
     rl_config.num_timesteps = 5_000_000
     rl_config.num_evals = 5
     rl_config.unroll_length = 10
