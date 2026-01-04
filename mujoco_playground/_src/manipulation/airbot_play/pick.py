@@ -31,15 +31,10 @@ def default_config() -> config_dict.ConfigDict:
       action_scale=0.04,
       reward_config=config_dict.create(
           scales=config_dict.create(
-              # Gripper goes to the box.
-              gripper_box=4.0,
-              # Box goes to the target mocap.
-            #   box_target=30.0,
-              box_target=10.0,
-              # Do not collide the gripper with the floor.
-              no_floor_collision=0.25,
-              # Arm stays close to target pose.
-              robot_target_qpos=0.015,
+              gripper_box=4.0,  # Gripper goes to the box.
+              box_target=10.0,  # 30.0, # Box goes to the target mocap.
+              no_floor_collision=0.25,  # Do not collide the gripper with the floor.
+              robot_target_qpos=0.015,  # Arm stays close to target pose.
           ),
         #   lifted_reward=20,
           lifted_reward=0.5,
@@ -64,8 +59,6 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
       config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
       sample_orientation: bool = False,
   ):
-    self._vision = config.vision
-
     xml_path = (
         mjx_env.ROOT_PATH
         / "manipulation"
@@ -78,6 +71,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         config,
         config_overrides,
     )
+    self._vision = config.vision
     self._post_init(obj_name="box", keyframe="init")
     self._sample_orientation = sample_orientation
 
@@ -196,12 +190,10 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
   def step(self, state: State, action: jax.Array) -> State:
     delta = action * self._action_scale
+    if self._vision:
+        delta = delta.at[-1].set(jp.where(delta[-1] < 0, -1.0, 1.0) * 0.02) # up to 2 cm movement per ctrl.
+
     ctrl = state.data.ctrl + delta
-    # if self._vision:
-    #     close_gripper = jp.where(delta[-1] < 0, 1.0, 0.0)
-    #     jaw_action = jp.where(close_gripper, -1.0, 1.0)
-    #     claw_delta = jaw_action * 0.02  # up to 2 cm movement per ctrl.
-    #     ctrl.at[7].add(claw_delta)
     ctrl = jp.clip(ctrl, self._lowers, self._uppers)
 
     data = mjx_env.step(self._mjx_model, state.data, ctrl, self.n_substeps)

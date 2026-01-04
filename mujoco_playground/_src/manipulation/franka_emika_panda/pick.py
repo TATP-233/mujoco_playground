@@ -75,8 +75,6 @@ class PandaPickCube(panda.PandaBase):
       config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
       sample_orientation: bool = False,
   ):
-    self._vision = config.vision
-
     xml_path = (
         mjx_env.ROOT_PATH
         / "manipulation"
@@ -89,6 +87,7 @@ class PandaPickCube(panda.PandaBase):
         config,
         config_overrides,
     )
+    self._vision = config.vision
     self._post_init(obj_name="box", keyframe="init") # "home"
     self._sample_orientation = sample_orientation
 
@@ -163,8 +162,8 @@ class PandaPickCube(panda.PandaBase):
     }
     if self._vision:
        metrics.update({
-           'reward/lifted': jp.array(0.0, dtype=float),
-           'reward/success': jp.array(0.0, dtype=float),
+           'reward/lifted'  : jp.array(0.0, dtype=float),
+           'reward/success' : jp.array(0.0, dtype=float),
        })
 
     info = {"rng": rng, "target_pos": target_pos, "reached_box": 0.0}
@@ -179,12 +178,10 @@ class PandaPickCube(panda.PandaBase):
 
   def step(self, state: State, action: jax.Array) -> State:
     delta = action * self._action_scale
-    ctrl = state.data.ctrl + delta
     if self._vision:
-        close_gripper = jp.where(delta[-1] < 0, 1.0, 0.0)
-        jaw_action = jp.where(close_gripper, -1.0, 1.0)
-        claw_delta = jaw_action * 0.02  # up to 2 cm movement per ctrl.
-        ctrl.at[7].add(claw_delta)
+        delta = delta.at[-1].set(jp.where(delta[-1] < 0, -1.0, 1.0) * 0.02) # up to 2 cm movement per ctrl.
+
+    ctrl = state.data.ctrl + delta
     ctrl = jp.clip(ctrl, self._lowers, self._uppers)
 
     data = mjx_env.step(self._mjx_model, state.data, ctrl, self.n_substeps)
