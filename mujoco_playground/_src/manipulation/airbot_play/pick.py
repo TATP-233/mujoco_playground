@@ -184,8 +184,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
            'reward/success': jp.array(0.0, dtype=float),
        })
 
-    info = {"rng": rng, "target_pos": target_pos, "reached_box": 0.0}
-    self._reset_box_pos = self._get_box_pos(data)
+    info = {"rng": rng, "target_pos": target_pos, "reached_box": 0.0, "reset_box_pos": self._get_box_pos(data)}
     if self._vision:
         obs = self._get_obs_vision(data, info)
     else:
@@ -218,7 +217,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     if self._vision:
         # Sparse rewards
         box_pos = self._get_box_pos(data)
-        lifted = (box_pos[2] > (self._reset_box_pos[2] + 0.01)) * self._config.reward_config.lifted_reward
+        lifted = (box_pos[2] > (state.info["reset_box_pos"][2] + 0.01)) * self._config.reward_config.lifted_reward
         reward += lifted
         success = self._get_success(data, state.info)
         reward += success * self._config.reward_config.success_reward
