@@ -30,10 +30,10 @@
         <joint range="-4.711 3.017" actuatorfrcrange="-16 16" damping="2"/>
       </default>
       <default class='finger_left'>
-        <joint axis='0 1 0' range="0 0.04" type='slide' actuatorfrcrange="-5 5" damping="1"/>
+        <joint axis='0 1 0' range="0 0.04" type='slide' actuatorfrcrange="-5 5" damping="2"/>
       </default>
       <default class='finger_right'>
-        <joint axis='0 -1 0' range="0 0.04" type='slide' actuatorfrcrange="-5 5" damping="1"/>
+        <joint axis='0 -1 0' range="0 0.04" type='slide' actuatorfrcrange="-5 5" damping="2"/>
       </default>
     </default>
     <site size="0.001" group="3"/>
@@ -127,12 +127,12 @@
     </body>
   </worldbody>
 
-  <tendon>
+  <!-- <tendon>
     <fixed name='gripper_gear'>
       <joint joint='endleft'  coef='0.5'/>
       <joint joint='endright' coef='0.5'/>
     </fixed>
-  </tendon>
+  </tendon> -->
 
   <equality>
     <joint joint1='endleft' joint2='endright' polycoef='0 1 0 0 0 '/>
@@ -145,7 +145,8 @@
     <jointpos name="joint4_pos" joint="joint4" />
     <jointpos name="joint5_pos" joint="joint5" />
     <jointpos name="joint6_pos" joint="joint6" />
-    <tendonpos name="gripper_pos" tendon="gripper_gear" />
+    <jointpos name="gripper_pos" joint="endleft" />
+    <!-- <tendonpos name="gripper_pos" tendon="gripper_gear" /> -->
 
     <jointvel name="joint1_vel" joint="joint1" />
     <jointvel name="joint2_vel" joint="joint2" />
@@ -153,7 +154,8 @@
     <jointvel name="joint4_vel" joint="joint4" />
     <jointvel name="joint5_vel" joint="joint5" />
     <jointvel name="joint6_vel" joint="joint6" />
-    <tendonvel name="gripper_vel" tendon="gripper_gear" />
+    <jointvel name="gripper_vel" joint="endleft" />
+    <!-- <tendonvel name="gripper_vel" tendon="gripper_gear" /> -->
 
     <jointactuatorfrc name="joint1_torque" joint="joint1" />
     <jointactuatorfrc name="joint2_torque" joint="joint2" />
@@ -161,7 +163,7 @@
     <jointactuatorfrc name="joint4_torque" joint="joint4" />
     <jointactuatorfrc name="joint5_torque" joint="joint5" />
     <jointactuatorfrc name="joint6_torque" joint="joint6" />
-    <jointactuatorfrc name="gripper_torque" joint="endright" />
+    <jointactuatorfrc name="gripper_torque" joint="endleft" />
 
     <framepos name="endpoint_pos" objtype="site" objname="endpoint" reftype="site" refname="armbase"/>
     <framequat name="endpoint_quat" objtype="site" objname="endpoint" reftype="site" refname="armbase"/>
@@ -177,7 +179,8 @@
     <position name="joint4" class='joint4' joint="joint4" kp="175" kv="3"/>
     <position name="joint5" class='joint5' joint="joint5" kp="175" kv="3"/>
     <position name="joint6" class='joint6' joint="joint6" kp="175" kv="3"/>
-    <position name='gripper' tendon='gripper_gear' ctrlrange="0. 0.04" kp="350" kv="10"/>
+    <position name='gripper' class='finger_left' joint="endleft" kp="250" kv="10"/>
+    <!-- <position name='gripper' tendon='gripper_gear' ctrlrange="0. 0.04" kp="350" kv="10"/> -->
   </actuator>
 
 </mujoco>

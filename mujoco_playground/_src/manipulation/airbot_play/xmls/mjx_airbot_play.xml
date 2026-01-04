@@ -1,4 +1,4 @@
-<mujoco model="airbot_play">
+<!-- <mujoco model="airbot_play"> -->
   <compiler angle="radian" meshdir="assets" autolimits="true"/>
 
   <default>
