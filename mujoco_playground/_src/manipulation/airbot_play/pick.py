@@ -290,7 +290,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     return rewards
 
   def _get_box_pos(self, data: mjx.Data) -> jax.Array:
-    return data.xpos[self._obj_body].at[2].add(0.02)
+    # return data.xpos[self._obj_body].at[2].add(0.02)
+    return data.xpos[self._obj_body]
 
   def _get_obs(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
     gripper_pos = data.site_xpos[self._gripper_site]
