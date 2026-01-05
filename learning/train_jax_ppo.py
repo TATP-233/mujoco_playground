@@ -198,10 +198,52 @@ def rscope_fn(full_states, obs, rew, done):
   )
 
 
+def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int):
+  env_cfg.vision = True
+  env_cfg.vision_config.render_batch_size = num_envs
+  env_cfg.vision_config.render_width = 64
+  env_cfg.vision_config.render_height = 64
+  
+  from mujoco_playground._src import mjx_env
+  from ml_collections import ConfigDict
+  reso = "224"
+  
+  gaussians_name = {}
+  if "Panda" in env_name:
+    assets_name = "franka_emika_panda"
+    bodies = ["link0", "link1", "link2", "link3", "link4", "link5", "link6", "link7", "hand", "left_finger", "right_finger"]
+    if env_name == "PandaPickCubeCartesian":
+      background_name = "ribbon.ply"
+      gaussians_name["box"] = "red_cube.ply"
+    elif env_name == "PandaPickCube":
+      background_name = "ribbon_blue.ply"
+      gaussians_name["box"] = "green_cube.ply"
+  elif "AirbotPlay" in env_name:
+    assets_name = "airbot_play"
+    bodies = ["arm_base", "link1", "link2", "link3", "link4", "link5", "link6", "left", "right"]
+    background_name = "ribbon_blue.ply"
+    gaussians_name["box"] = "green_cube.ply"
+
+  assets_path = mjx_env.ROOT_PATH / "manipulation" / assets_name / "3dgs"
+  body_gaussians = {b: (assets_path / reso / f"{b}.ply").as_posix() for b in bodies}
+  
+  env_cfg.vision_config.background = (assets_path / background_name).as_posix()
+  for k, v in gaussians_name.items():
+    body_gaussians[k] = (assets_path / v).as_posix()
+
+  env_cfg.vision_config.body_gaussians = ConfigDict(body_gaussians)
+
+
 def main(argv):
   """Run training and evaluation for the specified environment."""
 
   del argv
+
+  # If play-only, use fewer envs
+  if _PLAY_ONLY.value:
+    num_envs = 64 if _VISION.value else 1
+  else:
+    num_envs = _NUM_ENVS.value
 
   # Load environment configuration
   env_cfg = registry.get_default_config(_ENV_NAME.value)
@@ -236,7 +278,7 @@ def main(argv):
   if _ENTROPY_COST.present:
     ppo_params.entropy_cost = _ENTROPY_COST.value
   if _NUM_ENVS.present:
-    ppo_params.num_envs = _NUM_ENVS.value
+    ppo_params.num_envs = num_envs
   if _NUM_EVAL_ENVS.present:
     ppo_params.num_eval_envs = _NUM_EVAL_ENVS.value
   if _BATCH_SIZE.present:
@@ -258,8 +300,7 @@ def main(argv):
   if _VALUE_OBS_KEY.present:
     ppo_params.network_factory.value_obs_key = _VALUE_OBS_KEY.value
   if _VISION.value:
-    env_cfg.vision = True
-    env_cfg.vision_config.render_batch_size = ppo_params.num_envs
+    configure_3dgs(env_cfg, _ENV_NAME.value, num_envs)
   env = registry.load(_ENV_NAME.value, config=env_cfg)
   if _RUN_EVALS.present:
     ppo_params.run_evals = _RUN_EVALS.value
@@ -446,6 +487,8 @@ def main(argv):
   if len(times) > 1:
     print(f"Time to JIT compile: {times[1] - times[0]}")
     print(f"Time to train: {times[-1] - times[1]}")
+
+  exit(0)
 
   print("Starting inference...")
 
