@@ -40,7 +40,7 @@ except ImportError:
 import torch
 import torch.utils.dlpack as tpack
 from etils import epath
-from mujoco_playground._src.gaussian_renderer import BatchSplatConfig, BatchSplatRenderer
+from gaussian_renderer import BatchSplatConfig, BatchSplatRenderer
 
 
 def _jax_to_torch(tensor):

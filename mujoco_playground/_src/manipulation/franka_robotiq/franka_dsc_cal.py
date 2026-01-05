@@ -14,7 +14,7 @@ os.environ["DISCOVERSE_ASSETS_DIR"] = os.path.join(os.path.dirname(os.path.abspa
 
 from discoverse.envs import SimulatorBase, SceneAlignmentGUI
 from discoverse.utils.base_config import BaseConfig
-from discoverse.gaussian_renderer import batch_render
+from gaussian_renderer import batch_render
 
 class FrankaCfg(BaseConfig):
     mjcf_file_path = "xmls/panda_robotiq.xml"

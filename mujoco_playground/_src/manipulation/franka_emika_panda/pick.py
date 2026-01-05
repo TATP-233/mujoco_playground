@@ -41,7 +41,7 @@ def default_config() -> config_dict.ConfigDict:
       sim_dt=0.005,
       episode_length=150,
       action_repeat=1,
-      action_scale=0.04,
+      action_scale=0.02,
       reward_config=config_dict.create(
           scales=config_dict.create(
               # Gripper goes to the box.
@@ -53,8 +53,8 @@ def default_config() -> config_dict.ConfigDict:
               # Arm stays close to target pose.
               robot_target_qpos=0.015, #0.3
           ),
-          lifted_reward=0.5,
-          success_reward=2.0,
+          lifted_reward=2.0, #0.5,
+          success_reward=10  #2.0,
       ),
       vision=False,
       vision_config=default_vision_config(),
@@ -105,8 +105,8 @@ class PandaPickCube(panda.PandaBase):
         jax.random.uniform(
             rng_box,
             (3,),
-            minval=jp.array([-0.2, -0.2, 0.0]),
-            maxval=jp.array([0.2, 0.2, 0.0]),
+            minval=jp.array([-0.1, -0.1, 0.0]),
+            maxval=jp.array([0.1, 0.1, 0.0]),
         )
         + self._init_obj_pos
     )
@@ -116,8 +116,8 @@ class PandaPickCube(panda.PandaBase):
         jax.random.uniform(
             rng_target,
             (3,),
-            minval=jp.array([-0.2, -0.2, 0.2]),
-            maxval=jp.array([0.2, 0.2, 0.4]),
+            minval=jp.array([-0.1, -0.1, 0.2]),
+            maxval=jp.array([0.1, 0.1, 0.4]),
         )
         + self._init_obj_pos
     )
@@ -195,9 +195,9 @@ class PandaPickCube(panda.PandaBase):
     }
 
     reward = jp.clip(sum(rewards.values()), -1e4, 1e4)
+    box_pos = data.xpos[self._obj_body]
     if self._vision:
         # Sparse rewards
-        box_pos = data.xpos[self._obj_body]
         lifted = (box_pos[2] > 0.05) * self._config.reward_config.lifted_reward
         reward += lifted
         success = self._get_success(data, state.info)

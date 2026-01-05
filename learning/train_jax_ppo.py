@@ -213,7 +213,7 @@ def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int
     assets_name = "franka_emika_panda"
     bodies = ["link0", "link1", "link2", "link3", "link4", "link5", "link6", "link7", "hand", "left_finger", "right_finger"]
     if env_name == "PandaPickCubeCartesian":
-      background_name = "ribbon.ply"
+      background_name = "ribbon_white.ply"
       gaussians_name["box"] = "red_cube.ply"
     elif env_name == "PandaPickCube":
       background_name = "ribbon_blue.ply"
