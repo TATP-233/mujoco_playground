@@ -30,6 +30,7 @@ from brax.training.agents.ppo import train as ppo
 from etils import epath
 import jax
 import jax.numpy as jp
+import numpy as np
 import mediapy as media
 from ml_collections import config_dict
 import mujoco
@@ -196,6 +197,22 @@ def rscope_fn(full_states, obs, rew, done):
       "Collected rscope rollouts with reward"
       f" {episode_rewards.mean():.3f} +- {episode_rewards.std():.3f}"
   )
+
+
+def tile(img, d):
+  """Tiles a batch of images into a single grid image."""
+  # img shape: [N, H, W, C]
+  n, h, w, c = img.shape
+  if n < d * d:
+    # Pad with zeros if we don't have enough images
+    padding = np.zeros((d * d - n, h, w, c), dtype=img.dtype)
+    img = np.concatenate([img, padding], axis=0)
+  elif n > d * d:
+    img = img[: d * d]
+  img = img.reshape((d, d, h, w, c))
+  # Swap axes to get [d*H, d*W, C]
+  img = img.transpose(0, 2, 1, 3, 4).reshape(d * h, d * w, c)
+  return img
 
 
 def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int):
@@ -439,11 +456,12 @@ def main(argv):
 
   # Load evaluation environment.
   eval_env = None
-  if not _VISION.value:
-    eval_env = registry.load(_ENV_NAME.value, config=env_cfg)
-  num_envs = 1
   if _VISION.value:
+    eval_env = env
     num_envs = env_cfg.vision_config.render_batch_size
+  else:
+    eval_env = registry.load(_ENV_NAME.value, config=env_cfg)
+    num_envs = 1
 
   policy_params_fn = lambda *args: None
   if _RSCOPE_ENVS.value:
@@ -480,7 +498,7 @@ def main(argv):
       environment=env,
       progress_fn=progress,
       policy_params_fn=policy_params_fn,
-      eval_env=eval_env,
+      eval_env=eval_env if not _VISION.value else None,
   )
 
   print("Done training.")
@@ -488,73 +506,132 @@ def main(argv):
     print(f"Time to JIT compile: {times[1] - times[0]}")
     print(f"Time to train: {times[-1] - times[1]}")
 
-  exit(0)
-
   print("Starting inference...")
 
   # Create inference function.
   inference_fn = make_inference_fn(params, deterministic=True)
   jit_inference_fn = jax.jit(inference_fn)
 
-  # Run evaluation rollouts.
-  def do_rollout(rng, state):
-    empty_data = state.data.__class__(
-        **{k: None for k in state.data.__annotations__}
-    )  # pytype: disable=attribute-error
-    empty_traj = state.__class__(**{k: None for k in state.__annotations__})  # pytype: disable=attribute-error
-    empty_traj = empty_traj.replace(data=empty_data)
-
-    def step(carry, _):
-      state, rng = carry
-      rng, act_key = jax.random.split(rng)
-      act = jit_inference_fn(state.obs, act_key)[0]
-      state = eval_env.step(state, act)
-      traj_data = empty_traj.tree_replace({
-          "data.qpos": state.data.qpos,
-          "data.qvel": state.data.qvel,
-          "data.time": state.data.time,
-          "data.ctrl": state.data.ctrl,
-          "data.mocap_pos": state.data.mocap_pos,
-          "data.mocap_quat": state.data.mocap_quat,
-          "data.xfrc_applied": state.data.xfrc_applied,
-      })
-      if _VISION.value:
-        traj_data = jax.tree_util.tree_map(lambda x: x[0], traj_data)
-      return (state, rng), traj_data
-
-    _, traj = jax.lax.scan(
-        step, (state, rng), None, length=_EPISODE_LENGTH.value
-    )
-    return traj
-
-  rng = jax.random.split(jax.random.PRNGKey(_SEED.value), _NUM_VIDEOS.value)
-  reset_states = jax.jit(jax.vmap(eval_env.reset))(rng)
-  if _VISION.value:
-    reset_states = jax.tree_util.tree_map(lambda x: x[0], reset_states)
-  traj_stacked = jax.jit(jax.vmap(do_rollout))(rng, reset_states)
-  trajectories = [None] * _NUM_VIDEOS.value
-  for i in range(_NUM_VIDEOS.value):
-    t = jax.tree.map(lambda x, i=i: x[i], traj_stacked)
-    trajectories[i] = [
-        jax.tree.map(lambda x, j=j: x[j], t)
-        for j in range(_EPISODE_LENGTH.value)
-    ]
-
-  # Render and save the rollout.
   render_every = 2
   fps = 1.0 / eval_env.dt / render_every
-  print(f"FPS for rendering: {fps}")
-  scene_option = mujoco.MjvOption()
-  scene_option.flags[mujoco.mjtVisFlag.mjVIS_TRANSPARENT] = False
-  scene_option.flags[mujoco.mjtVisFlag.mjVIS_PERTFORCE] = False
-  scene_option.flags[mujoco.mjtVisFlag.mjVIS_CONTACTFORCE] = False
-  for i, rollout in enumerate(trajectories):
-    traj = rollout[::render_every]
-    frames = eval_env.render(
-        traj, height=480, width=640, scene_option=scene_option
-    )
-    media.write_video(f"rollout{i}.mp4", frames, fps=fps)
-    print(f"Rollout video saved as 'rollout{i}.mp4'.")
+
+  if _VISION.value:
+      # Master key
+      key = jax.random.PRNGKey(_SEED.value)
+      
+      # Reset. Env is batched, so we need batch of keys.
+      key, reset_key = jax.random.split(key)
+      reset_keys = jax.random.split(reset_key, num_envs)
+      
+      state = jax.jit(eval_env.reset)(reset_keys)
+      
+      step_fn = jax.jit(eval_env.step)
+      inference_fn_jit = jax.jit(inference_fn)
+      
+      pixel_frames = []
+      
+      # Helper to extract pixels from obs
+      def get_pixels(obs):
+          # obs should be a dict with keys 'pixels/view_0', etc.
+          if isinstance(obs, dict):
+              keys = sorted([k for k in obs.keys() if k.startswith("pixels/view_")])
+              if keys:
+                  # Stack along axis 1 (num_cams)
+                  views = [obs[k] for k in keys]
+                  return jp.stack(views, axis=1) 
+          return None
+
+      # Initial frame
+      pixels = get_pixels(state.obs)
+      if pixels is not None:
+         pixel_frames.append(pixels)
+
+      for i in range(_EPISODE_LENGTH.value):
+          print(i)
+          key, act_key = jax.random.split(key)
+          act_keys = jax.random.split(act_key, num_envs)
+          
+          act, _ = inference_fn_jit(state.obs, act_keys)
+          state = step_fn(state, act)
+          
+          if i % render_every == 0:
+              pixels = get_pixels(state.obs)
+              if pixels is not None:
+                  pixel_frames.append(pixels)
+      
+      # Process frames for video
+      if pixel_frames:
+           print("Processing and saving video...")
+           # Convert JAX arrays to numpy
+           pixel_frames = [np.array(f) for f in pixel_frames]
+           
+           d = int(np.sqrt(num_envs))
+           processed_frames = []
+           for f in pixel_frames:
+               # f shape: [num_envs, num_cameras, H, W, 3]
+               # Concatenate all cameras horizontally: [num_envs, H, num_cameras * W, 3]
+               f_combined = np.concatenate([f[:, i] for i in range(f.shape[1])], axis=2)
+               # Tile
+               processed_frames.append(tile(f_combined, d))
+           
+           media.write_video("rollout.mp4", processed_frames, fps=fps)
+           print("Rollout video saved as 'rollout.mp4'.")
+      else:
+           print("No pixels found in observation, cannot save video.")
+
+  else:
+    # Run evaluation rollouts.
+    def do_rollout(rng, state):
+      empty_data = state.data.__class__(
+          **{k: None for k in state.data.__annotations__}
+      )  # pytype: disable=attribute-error
+      empty_traj = state.__class__(**{k: None for k in state.__annotations__})  # pytype: disable=attribute-error
+      empty_traj = empty_traj.replace(data=empty_data)
+
+      def step(carry, _):
+        state, rng = carry
+        rng, act_key = jax.random.split(rng)
+        act = jit_inference_fn(state.obs, act_key)[0]
+        state = eval_env.step(state, act)
+        traj_data = empty_traj.tree_replace({
+            "data.qpos": state.data.qpos,
+            "data.qvel": state.data.qvel,
+            "data.time": state.data.time,
+            "data.ctrl": state.data.ctrl,
+            "data.mocap_pos": state.data.mocap_pos,
+            "data.mocap_quat": state.data.mocap_quat,
+            "data.xfrc_applied": state.data.xfrc_applied,
+        })
+        return (state, rng), traj_data
+
+      _, traj = jax.lax.scan(
+          step, (state, rng), None, length=_EPISODE_LENGTH.value
+      )
+      return traj
+
+    rng = jax.random.split(jax.random.PRNGKey(_SEED.value), _NUM_VIDEOS.value)
+    reset_states = jax.jit(jax.vmap(eval_env.reset))(rng)
+    traj_stacked = jax.jit(jax.vmap(do_rollout))(rng, reset_states)
+    trajectories = [None] * _NUM_VIDEOS.value
+    for i in range(_NUM_VIDEOS.value):
+      t = jax.tree.map(lambda x, i=i: x[i], traj_stacked)
+      trajectories[i] = [
+          jax.tree.map(lambda x, j=j: x[j], t)
+          for j in range(_EPISODE_LENGTH.value)
+      ]
+
+    # Render and save the rollout.
+    scene_option = mujoco.MjvOption()
+    scene_option.flags[mujoco.mjtVisFlag.mjVIS_TRANSPARENT] = False
+    scene_option.flags[mujoco.mjtVisFlag.mjVIS_PERTFORCE] = False
+    scene_option.flags[mujoco.mjtVisFlag.mjVIS_CONTACTFORCE] = False
+    for i, rollout in enumerate(trajectories):
+      traj = rollout[::render_every]
+      frames = eval_env.render(
+          traj, height=480, width=640, scene_option=scene_option
+      )
+      media.write_video(f"rollout{i}.mp4", frames, fps=fps)
+      print(f"Rollout video saved as 'rollout{i}.mp4'.")
 
 
 if __name__ == "__main__":
