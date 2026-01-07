@@ -88,26 +88,28 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     rng, rng_box, rng_target = jax.random.split(rng, 3)
 
     # intialize box position
-    box_pos = (
-        jax.random.uniform(
-            rng_box,
-            (3,),
-            minval=jp.array([-0.1, -0.1, 0.0]),
-            maxval=jp.array([0.1, 0.1, 0.0]),
-        )
-        + self._init_obj_pos
-    )
+    # box_pos = (
+    #     jax.random.uniform(
+    #         rng_box,
+    #         (3,),
+    #         minval=jp.array([-0.1, -0.1, 0.0]),
+    #         maxval=jp.array([0.1, 0.1, 0.0]),
+    #     )
+    #     + self._init_obj_pos
+    # )
+    box_pos = self._init_obj_pos
 
     # initialize target position
-    target_pos = (
-        jax.random.uniform(
-            rng_target,
-            (3,),
-            minval=jp.array([-0.1, -0.1, 0.2]),
-            maxval=jp.array([0.1, 0.1, 0.4]),
-        )
-        + self._init_obj_pos
-    )
+    # target_pos = (
+        # jax.random.uniform(
+            # rng_target,
+            # (3,),
+            # minval=jp.array([-0.1, -0.1, 0.2]),
+            # maxval=jp.array([0.1, 0.1, 0.4]),
+        # )
+        # + self._init_obj_pos
+    # )
+    target_pos = box_pos.at[2].add(0.03)
 
     target_quat = jp.array([1.0, 0.0, 0.0, 0.0], dtype=float)
     if self._sample_orientation:
