@@ -9,7 +9,7 @@ from mujoco import mjx
 from mujoco.mjx._src import math
 from mujoco_playground._src import mjx_env
 from mujoco_playground._src.manipulation.airbot_play import airbot_play
-from mujoco_playground._src.mjx_env import State
+from mujoco_playground._src.mjx_env import State  # pylint: disable=g-importing-member
 import numpy as np
 
 
@@ -28,17 +28,20 @@ def default_config() -> config_dict.ConfigDict:
       sim_dt=0.005,
       episode_length=150,
       action_repeat=1,
-      action_scale=0.04,
+      action_scale=0.02,
       reward_config=config_dict.create(
           scales=config_dict.create(
-              gripper_box=4.0,  # Gripper goes to the box.
-              box_target=10.0,  # 30.0, # Box goes to the target mocap.
-              no_floor_collision=0.25,  # Do not collide the gripper with the floor.
-              robot_target_qpos=0.015,  # Arm stays close to target pose.
+              # Gripper goes to the box.
+              gripper_box=4.0,
+              # Box goes to the target mocap.
+              box_target=10., #8.0,
+              # Do not collide the gripper with the floor.
+              no_floor_collision=0.25,
+              # Arm stays close to target pose.
+              robot_target_qpos=0.015, #0.3
           ),
-        #   lifted_reward=20,
-          lifted_reward=0.5,
-          success_reward=2.0,
+          lifted_reward=2.0, #0.5,
+          success_reward=10  #2.0,
       ),
       vision=False,
       vision_config=default_vision_config(),
@@ -81,34 +84,6 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         for geom in ["left_finger_pad", "right_finger_pad", "hand_box"]
     ]
 
-  def _post_init(self, obj_name: str, keyframe: str):
-    all_joints = airbot_play._ARM_JOINTS + airbot_play._FINGER_JOINTS
-    self._robot_arm_qposadr = np.array([
-        self._mj_model.jnt_qposadr[self._mj_model.joint(j).id]
-        for j in airbot_play._ARM_JOINTS
-    ])
-    self._robot_qposadr = np.array([
-        self._mj_model.jnt_qposadr[self._mj_model.joint(j).id]
-        for j in all_joints
-    ])
-    self._gripper_site = self._mj_model.site("endpoint").id
-    self._left_finger_geom = self._mj_model.geom("left_finger_pad").id
-    self._right_finger_geom = self._mj_model.geom("right_finger_pad").id
-    self._hand_geom = self._mj_model.geom("hand_box").id
-    self._obj_body = self._mj_model.body(obj_name).id
-    self._obj_qposadr = self._mj_model.jnt_qposadr[
-        self._mj_model.body(obj_name).jntadr[0]
-    ]
-    self._mocap_target = self._mj_model.body("mocap_target").mocapid
-    self._floor_geom = self._mj_model.geom("floor").id
-    self._init_q = self._mj_model.keyframe(keyframe).qpos
-    self._init_obj_pos = jp.array(
-        self._init_q[self._obj_qposadr : self._obj_qposadr + 3],
-        dtype=jp.float32,
-    )
-    self._init_ctrl = self._mj_model.keyframe(keyframe).ctrl
-    self._lowers, self._uppers = self._mj_model.actuator_ctrlrange.T
-
   def reset(self, rng: jax.Array) -> State:
     rng, rng_box, rng_target = jax.random.split(rng, 3)
 
@@ -128,8 +103,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         jax.random.uniform(
             rng_target,
             (3,),
-            minval=jp.array([-0.1, -0.1, 0.1]),
-            maxval=jp.array([0.1, 0.1, 0.2]),
+            minval=jp.array([-0.1, -0.1, 0.2]),
+            maxval=jp.array([0.1, 0.1, 0.4]),
         )
         + self._init_obj_pos
     )
@@ -178,7 +153,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
            'reward/success': jp.array(0.0, dtype=float),
        })
 
-    info = {"rng": rng, "target_pos": target_pos, "reached_box": 0.0, "reset_box_pos": self._get_box_pos(data)}
+    info = {"rng": rng, "target_pos": target_pos, "reached_box": 0.0}
     if self._vision:
         obs = self._get_obs_vision(data, info)
     else:
@@ -205,11 +180,12 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         k: v * self._config.reward_config.scales[k]
         for k, v in raw_rewards.items()
     }
+
     reward = jp.clip(sum(rewards.values()), -1e4, 1e4)
+    box_pos = data.xpos[self._obj_body]
     if self._vision:
         # Sparse rewards
-        box_pos = self._get_box_pos(data)
-        lifted = (box_pos[2] > (state.info["reset_box_pos"][2] + 0.01)) * self._config.reward_config.lifted_reward
+        lifted = (box_pos[2] > 0.05) * self._config.reward_config.lifted_reward
         reward += lifted
         success = self._get_success(data, state.info)
         reward += success * self._config.reward_config.success_reward
@@ -222,8 +198,6 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     out_of_bounds |= box_pos[2] < 0.0
     done = out_of_bounds | jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
     done = done.astype(float)
-
-    # reward = jp.where(jp.isnan(reward), -1e4, reward)
 
     state.metrics.update(
         **raw_rewards, out_of_bounds=out_of_bounds.astype(float)
@@ -238,13 +212,13 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     return state
 
   def _get_success(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
-    box_pos = self._get_box_pos(data)
+    box_pos = data.xpos[self._obj_body]
     target_pos = info['target_pos']
     return jp.linalg.norm(box_pos - target_pos) < self._config.success_threshold
 
   def _get_reward(self, data: mjx.Data, info: Dict[str, Any]) -> Dict[str, Any]:
     target_pos = info["target_pos"]
-    box_pos = self._get_box_pos(data)
+    box_pos = data.xpos[self._obj_body]
     gripper_pos = data.site_xpos[self._gripper_site]
     pos_err = jp.linalg.norm(target_pos - box_pos)
     box_mat = data.xmat[self._obj_body]
@@ -281,10 +255,6 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     }
     return rewards
 
-  def _get_box_pos(self, data: mjx.Data) -> jax.Array:
-    # return data.xpos[self._obj_body].at[2].add(0.02)
-    return data.xpos[self._obj_body]
-
   def _get_obs(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
     gripper_pos = data.site_xpos[self._gripper_site]
     gripper_mat = data.site_xmat[self._gripper_site].ravel()
@@ -295,8 +265,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         gripper_pos,
         gripper_mat[3:],
         data.xmat[self._obj_body].ravel()[3:],
-        self._get_box_pos(data) - data.site_xpos[self._gripper_site],
-        info["target_pos"] - self._get_box_pos(data),
+        data.xpos[self._obj_body] - data.site_xpos[self._gripper_site],
+        info["target_pos"] - data.xpos[self._obj_body],
         target_mat.ravel()[:6] - data.xmat[self._obj_body].ravel()[:6],
         data.ctrl - data.qpos[self._robot_qposadr[:-1]],
     ])

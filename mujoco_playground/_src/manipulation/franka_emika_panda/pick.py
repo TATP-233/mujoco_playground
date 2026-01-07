@@ -26,6 +26,7 @@ from mujoco_playground._src.manipulation.franka_emika_panda import panda
 from mujoco_playground._src.mjx_env import State  # pylint: disable=g-importing-member
 import numpy as np
 
+
 def default_vision_config() -> config_dict.ConfigDict:
   return config_dict.create(
       render_batch_size=1024,
@@ -88,7 +89,7 @@ class PandaPickCube(panda.PandaBase):
         config_overrides,
     )
     self._vision = config.vision
-    self._post_init(obj_name="box", keyframe="init") # "home"
+    self._post_init(obj_name="box", keyframe="init")
     self._sample_orientation = sample_orientation
 
     # Contact sensor IDs.
@@ -162,8 +163,8 @@ class PandaPickCube(panda.PandaBase):
     }
     if self._vision:
        metrics.update({
-           'reward/lifted'  : jp.array(0.0, dtype=float),
-           'reward/success' : jp.array(0.0, dtype=float),
+           'reward/lifted': jp.array(0.0, dtype=float),
+           'reward/success': jp.array(0.0, dtype=float),
        })
 
     info = {"rng": rng, "target_pos": target_pos, "reached_box": 0.0}

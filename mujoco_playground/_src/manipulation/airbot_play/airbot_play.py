@@ -66,7 +66,7 @@ class AirbotPlayBase(mjx_env.MjxEnv):
     self._obj_qposadr = self._mj_model.jnt_qposadr[
         self._mj_model.body(obj_name).jntadr[0]
     ]
-    # self._mocap_target = self._mj_model.body("mocap_target").mocapid
+    self._mocap_target = self._mj_model.body("mocap_target").mocapid
     self._floor_geom = self._mj_model.geom("floor").id
     self._init_q = self._mj_model.keyframe(keyframe).qpos
     self._init_obj_pos = jp.array(
