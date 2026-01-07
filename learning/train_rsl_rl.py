@@ -150,6 +150,7 @@ def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int
     gaussians_name["box"] = "green_cube.ply"
 
   assets_path = mjx_env.ROOT_PATH / "manipulation" / assets_name / "3dgs"
+  print(f"3DGS assets path: {assets_path.as_posix()}")
   body_gaussians = {b: (assets_path / reso / f"{b}.ply").as_posix() for b in bodies}
   
   env_cfg.vision_config.background = (assets_path / background_name).as_posix()
@@ -295,6 +296,8 @@ def main(argv):
         checkpoint=train_cfg.checkpoint,
     )
     print(f"Loading model from checkpoint: {resume_path}")
+    model_name = resume_path.split("/")[-1].split(".")[0]
+    print(f"Model name: {model_name}")
     runner.load(resume_path)
 
   if not _PLAY_ONLY.value:
@@ -424,9 +427,9 @@ def main(argv):
         width=640,
         scene_option=scene_option,
     )
-
-  media.write_video("rollout.mp4", frames, fps=fps)
-  print("Rollout video saved as 'rollout.mp4'.")
+  video_name = f"{_ENV_NAME.value}-{model_name}-rollout.mp4"
+  media.write_video(video_name, frames, fps=fps)
+  print(f"Rollout video saved as '{video_name}'.")
 
 
 if __name__ == "__main__":
