@@ -573,9 +573,9 @@ def main(argv):
                f_combined = np.concatenate([f[:, i] for i in range(f.shape[1])], axis=2)
                # Tile
                processed_frames.append(tile(f_combined, d))
-           
-           media.write_video("rollout.mp4", processed_frames, fps=fps)
-           print("Rollout video saved as 'rollout.mp4'.")
+           video_name = f"rollout_{_ENV_NAME.value}.mp4"
+           media.write_video(video_name, processed_frames, fps=fps)
+           print(f"Rollout video saved as {video_name}.")
       else:
            print("No pixels found in observation, cannot save video.")
 
@@ -630,8 +630,9 @@ def main(argv):
       frames = eval_env.render(
           traj, height=480, width=640, scene_option=scene_option
       )
-      media.write_video(f"rollout{i}.mp4", frames, fps=fps)
-      print(f"Rollout video saved as 'rollout{i}.mp4'.")
+      video_name = f"rollout_jax_{_ENV_NAME.value}{i}.mp4"
+      media.write_video(video_name, frames, fps=fps)
+      print(f"Rollout video saved as {video_name}.")
 
 
 if __name__ == "__main__":
