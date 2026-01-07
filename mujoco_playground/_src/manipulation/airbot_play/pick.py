@@ -109,7 +109,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         # )
         # + self._init_obj_pos
     # )
-    target_pos = box_pos.at[2].add(0.03)
+    target_pos = box_pos.at[2].add(0.06)
 
     target_quat = jp.array([1.0, 0.0, 0.0, 0.0], dtype=float)
     if self._sample_orientation:
