@@ -62,6 +62,7 @@ class AirbotPlayBase(mjx_env.MjxEnv):
     self._gripper_site = self._mj_model.site("endpoint").id
     self._left_finger_geom = self._mj_model.geom("left_finger_pad").id
     self._right_finger_geom = self._mj_model.geom("right_finger_pad").id
+    self._hand_geom = self._mj_model.geom("hand_box").id
     self._obj_body = self._mj_model.body(obj_name).id
     self._obj_qposadr = self._mj_model.jnt_qposadr[
         self._mj_model.body(obj_name).jntadr[0]
