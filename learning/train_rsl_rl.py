@@ -37,7 +37,6 @@ import torch
 import torch.nn as nn
 from tensordict import TensorDict
 import warp as wp
-
 from actor_critic_cnn import ActorCriticCNN
 import rsl_rl.modules
 
@@ -427,9 +426,11 @@ def main(argv):
         width=640,
         scene_option=scene_option,
     )
-  video_name = f"{_ENV_NAME.value}-{model_name}-rollout.mp4"
+  video_dir = f"videos/{_LOAD_RUN_NAME.value}"
+  os.makedirs(video_dir, exist_ok=True)
+  video_name = f"{video_dir}/{_ENV_NAME.value}-{model_name}-rollout.mp4"
   media.write_video(video_name, frames, fps=fps)
-  print(f"Rollout video saved as '{video_name}'.")
+  print(f"Rollout video saved to '{video_name}'.")
 
 
 if __name__ == "__main__":
