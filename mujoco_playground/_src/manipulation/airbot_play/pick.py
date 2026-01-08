@@ -184,7 +184,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     }
 
     reward = jp.clip(sum(rewards.values()), -1e4, 1e4)
-    box_pos = data.xpos[self._obj_body]
+    box_pos = self._get_box_pos(data)
     if self._vision:
         # Sparse rewards
         lifted = (box_pos[2] > 0.05) * self._config.reward_config.lifted_reward
@@ -214,13 +214,13 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     return state
 
   def _get_success(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
-    box_pos = data.xpos[self._obj_body]
+    box_pos = self._get_box_pos(data)
     target_pos = info['target_pos']
     return jp.linalg.norm(box_pos - target_pos) < self._config.success_threshold
 
   def _get_reward(self, data: mjx.Data, info: Dict[str, Any]) -> Dict[str, Any]:
     target_pos = info["target_pos"]
-    box_pos = data.xpos[self._obj_body]
+    box_pos = self._get_box_pos(data)
     gripper_pos = data.site_xpos[self._gripper_site]
     pos_err = jp.linalg.norm(target_pos - box_pos)
     box_mat = data.xmat[self._obj_body]
@@ -229,12 +229,12 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
     box_target = 1 - jp.tanh(5 * (0.9 * pos_err + 0.1 * rot_err))
     gripper_box = 1 - jp.tanh(5 * jp.linalg.norm(box_pos - gripper_pos))
-    robot_target_qpos = 1 - jp.tanh(
-        jp.linalg.norm(
-            data.qpos[self._robot_arm_qposadr]
-            - self._init_q[self._robot_arm_qposadr]
-        )
-    )
+    # robot_target_qpos = 1 - jp.tanh(
+    #     jp.linalg.norm(
+    #         data.qpos[self._robot_arm_qposadr]
+    #         - self._init_q[self._robot_arm_qposadr]
+    #     )
+    # )
 
     # Check for collisions with the floor
     hand_floor_collision = [
@@ -244,21 +244,19 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     floor_collision = sum(hand_floor_collision) > 0
     no_floor_collision = (1 - floor_collision).astype(float)
 
-    info["reached_box"] = 1.0 * jp.maximum(
-        info["reached_box"],
-        (jp.linalg.norm(box_pos - gripper_pos) < 0.012),
-    )
+    info["reached_box"] = 1.0 * (jp.linalg.norm(box_pos - gripper_pos) < 0.005)
 
     rewards = {
         "gripper_box": gripper_box,
         "box_target": box_target * info["reached_box"],
         "no_floor_collision": no_floor_collision,
-        "robot_target_qpos": robot_target_qpos,
+        # "robot_target_qpos": robot_target_qpos,
     }
     return rewards
 
   def _get_obs(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
     gripper_pos = data.site_xpos[self._gripper_site]
+    box_pos = self._get_box_pos(data)
     gripper_mat = data.site_xmat[self._gripper_site].ravel()
     target_mat = math.quat_to_mat(data.mocap_quat[self._mocap_target])
     obs = jp.concatenate([
@@ -267,13 +265,17 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         gripper_pos,
         gripper_mat[3:],
         data.xmat[self._obj_body].ravel()[3:],
-        data.xpos[self._obj_body] - data.site_xpos[self._gripper_site],
-        info["target_pos"] - data.xpos[self._obj_body],
+        box_pos - data.site_xpos[self._gripper_site],
+        info["target_pos"] - box_pos,
         target_mat.ravel()[:6] - data.xmat[self._obj_body].ravel()[:6],
         data.ctrl - data.qpos[self._robot_qposadr[:-1]],
     ])
 
     return obs
+
+  def _get_box_pos(self, data: mjx.Data) -> jax.Array:
+    box_pos = data.xpos[self._obj_body]
+    return box_pos.at[2].add(-0.03)
 
   def _get_obs_vision(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
     gripper_pos = data.site_xpos[self._gripper_site]
