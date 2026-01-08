@@ -198,7 +198,10 @@ def main(argv):
   print(f"Experiment name: {exp_name}")
 
   # Logging directory
-  logdir = os.path.abspath(os.path.join(project_path, "rslrl-training-logs/", exp_name))
+  if _PLAY_ONLY.value:
+    logdir = os.path.abspath(os.path.join(project_path, "rslrl-eval-logs/", exp_name))
+  else:
+    logdir = os.path.abspath(os.path.join(project_path, "rslrl-training-logs/", exp_name))
   os.makedirs(logdir, exist_ok=True)
   print(f"Logs are being stored in: {logdir}")
 
