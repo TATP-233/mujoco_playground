@@ -111,7 +111,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         # )
         # + self._init_obj_pos
     # )
-    target_pos = box_pos.at[2].add(0.06)
+    target_pos = box_pos.at[2].add(0.01)
 
     target_quat = jp.array([1.0, 0.0, 0.0, 0.0], dtype=float)
     if self._sample_orientation:
@@ -295,7 +295,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
   def _get_box_pos(self, data: mjx.Data) -> jax.Array:
     box_pos = data.xpos[self._obj_body]
-    return box_pos.at[2].add(-0.02)
+    return box_pos.at[2].add(-0.05)
 
   def _get_obs_vision(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
     gripper_pos = data.site_xpos[self._gripper_site]
