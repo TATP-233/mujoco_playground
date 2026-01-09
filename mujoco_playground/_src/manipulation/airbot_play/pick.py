@@ -98,7 +98,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     #     + self._init_obj_pos
     # )
     box_pos = self._init_obj_pos
-
+    print(f"init box pos={box_pos}")
     # initialize target position
     # target_pos = (
         # jax.random.uniform(
@@ -153,6 +153,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
        metrics.update({
            'reward/lifted': jp.array(0.0, dtype=float),
            'reward/success': jp.array(0.0, dtype=float),
+           "has_non": False,
        })
 
     info = {"rng": rng, "target_pos": target_pos, "reached_box": 0.0}
@@ -187,7 +188,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     box_pos = self._get_box_pos(data)
     if self._vision:
         # Sparse rewards
-        lifted = (box_pos[2] > 0.05) * self._config.reward_config.lifted_reward
+        lifted = (box_pos[2] > 0.012) * self._config.reward_config.lifted_reward
         reward += lifted
         success = self._get_success(data, state.info)
         reward += success * self._config.reward_config.success_reward
@@ -197,10 +198,11 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         })
 
     out_of_bounds = jp.any(jp.abs(box_pos) > 1.0)
-    out_of_bounds |= box_pos[2] < 0.0
-    done = out_of_bounds | jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
+    out_of_bounds |= box_pos[2] < -0.002
+    has_non = jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
+    done = out_of_bounds | has_non
     done = done.astype(float)
-
+    state.metrics.update({"has_non": has_non})
     state.metrics.update(
         **raw_rewards, out_of_bounds=out_of_bounds.astype(float)
     )
@@ -244,6 +246,10 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     floor_collision = sum(hand_floor_collision) > 0
     no_floor_collision = (1 - floor_collision).astype(float)
 
+    # info["reached_box"] = 1.0 * jp.maximum(
+    #     info["reached_box"],
+    #     (jp.linalg.norm(box_pos - gripper_pos) < 0.012),
+    # )
     info["reached_box"] = 1.0 * (jp.linalg.norm(box_pos - gripper_pos) < 0.005)
 
     rewards = {
@@ -275,7 +281,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
   def _get_box_pos(self, data: mjx.Data) -> jax.Array:
     box_pos = data.xpos[self._obj_body]
-    return box_pos.at[2].add(-0.03)
+    return box_pos.at[2].add(-0.02)
 
   def _get_obs_vision(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
     gripper_pos = data.site_xpos[self._gripper_site]
