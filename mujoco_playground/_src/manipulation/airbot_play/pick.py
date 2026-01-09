@@ -45,7 +45,7 @@ def default_config() -> config_dict.ConfigDict:
       ),
       vision=False,
       vision_config=default_vision_config(),
-      success_threshold=0.05,
+      success_threshold=0.03,
       impl='jax',
       nconmax=24 * 2048,
       njmax=128,
@@ -156,7 +156,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
            "has_non": False,
        })
 
-    info = {"rng": rng, "target_pos": target_pos, "reached_box": 0.0}
+    info = {"rng": rng, "target_pos": target_pos, "reached_box": 0.0, "init_box_pos": self._get_box_pos(data)}
     if self._vision:
         obs = self._get_obs_vision(data, info)
     else:
@@ -188,7 +188,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     box_pos = self._get_box_pos(data)
     if self._vision:
         # Sparse rewards
-        lifted = (box_pos[2] > 0.012) * self._config.reward_config.lifted_reward
+        lifted = (box_pos[2] > (state.info["init_box_pos"][2] + 0.005)) * self._config.reward_config.lifted_reward * state.info["reached_box"]
         reward += lifted
         success = self._get_success(data, state.info)
         reward += success * self._config.reward_config.success_reward
