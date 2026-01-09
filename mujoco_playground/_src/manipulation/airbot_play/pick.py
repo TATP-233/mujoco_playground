@@ -39,6 +39,8 @@ def default_config() -> config_dict.ConfigDict:
               no_floor_collision=0.25,
               # Arm stays close to target pose.
               robot_target_qpos=0.015, #0.3
+              # Close the gripper after reaching the box.
+              gripper_close=2.0,
           ),
           lifted_reward=2.0, #0.5,
           success_reward=10  #2.0,
@@ -252,10 +254,22 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     # )
     info["reached_box"] = 1.0 * (jp.linalg.norm(box_pos - gripper_pos) < 0.005)
 
+    # Encourage closing the gripper only after it has reached the box.
+    gripper_opening = jp.mean(data.qpos[self._robot_qposadr[-2:]])
+    max_gripper_opening = jp.asarray(self._uppers[-1])
+    # jax.debug.print(
+    #     "gripper_opening={g}, max_gripper_opening={m}",
+    #     g=gripper_opening,
+    #     m=max_gripper_opening,
+    # )
+
+    gripper_close = info["reached_box"] * (1 - jp.clip(gripper_opening / max_gripper_opening, 0.0, 1.0))
+
     rewards = {
         "gripper_box": gripper_box,
         "box_target": box_target * info["reached_box"],
         "no_floor_collision": no_floor_collision,
+        "gripper_close": gripper_close,
         # "robot_target_qpos": robot_target_qpos,
     }
     return rewards
