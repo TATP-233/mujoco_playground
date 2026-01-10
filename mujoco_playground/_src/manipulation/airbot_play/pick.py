@@ -47,7 +47,7 @@ def default_config() -> config_dict.ConfigDict:
       ),
       vision=False,
       vision_config=default_vision_config(),
-      success_threshold=0.03,
+      success_threshold=0.01,
       impl='jax',
       nconmax=24 * 2048,
       njmax=128,
@@ -111,7 +111,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         # )
         # + self._init_obj_pos
     # )
-    target_pos = box_pos.at[2].add(0.01)
+    target_pos = box_pos.at[2].add(0.02)
 
     target_quat = jp.array([1.0, 0.0, 0.0, 0.0], dtype=float)
     if self._sample_orientation:
@@ -255,21 +255,21 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     info["reached_box"] = 1.0 * (jp.linalg.norm(box_pos - gripper_pos) < 0.005)
 
     # Encourage closing the gripper only after it has reached the box.
-    gripper_opening = jp.mean(data.qpos[self._robot_qposadr[-2:]])
-    max_gripper_opening = jp.asarray(self._uppers[-1])
+    # gripper_opening = jp.mean(data.qpos[self._robot_qposadr[-2:]])
+    # max_gripper_opening = jp.asarray(self._uppers[-1])
     # jax.debug.print(
     #     "gripper_opening={g}, max_gripper_opening={m}",
     #     g=gripper_opening,
     #     m=max_gripper_opening,
     # )
 
-    gripper_close = info["reached_box"] * (1 - jp.clip(gripper_opening / max_gripper_opening, 0.0, 1.0))
+    # gripper_close = info["reached_box"] * (1 - jp.clip(gripper_opening / max_gripper_opening, 0.0, 1.0))
 
     rewards = {
         "gripper_box": gripper_box,
         "box_target": box_target * info["reached_box"],
         "no_floor_collision": no_floor_collision,
-        "gripper_close": gripper_close,
+        # "gripper_close": gripper_close,
         # "robot_target_qpos": robot_target_qpos,
     }
     return rewards
@@ -295,7 +295,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
   def _get_box_pos(self, data: mjx.Data) -> jax.Array:
     box_pos = data.xpos[self._obj_body]
-    return box_pos.at[2].add(-0.05)
+    return box_pos
 
   def _get_obs_vision(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
     gripper_pos = data.site_xpos[self._gripper_site]
