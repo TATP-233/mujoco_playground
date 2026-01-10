@@ -233,12 +233,12 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
     box_target = 1 - jp.tanh(5 * (0.9 * pos_err + 0.1 * rot_err))
     gripper_box = 1 - jp.tanh(5 * jp.linalg.norm(box_pos - gripper_pos))
-    robot_target_qpos = 1 - jp.tanh(
-        jp.linalg.norm(
-            data.qpos[self._robot_arm_qposadr]
-            - self._init_q[self._robot_arm_qposadr]
-        )
-    )
+    # robot_target_qpos = 1 - jp.tanh(
+    #     jp.linalg.norm(
+    #         data.qpos[self._robot_arm_qposadr]
+    #         - self._init_q[self._robot_arm_qposadr]
+    #     )
+    # )
 
     # Check for collisions with the floor
     hand_floor_collision = [
@@ -248,11 +248,11 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     floor_collision = sum(hand_floor_collision) > 0
     no_floor_collision = (1 - floor_collision).astype(float)
 
-    info["reached_box"] = 1.0 * jp.maximum(
-        info["reached_box"],
-        (jp.linalg.norm(box_pos - gripper_pos) < 0.005),
-    )
-    # info["reached_box"] = 1.0 * (jp.linalg.norm(box_pos - gripper_pos) < 0.005)
+    # info["reached_box"] = 1.0 * jp.maximum(
+    #     info["reached_box"],
+    #     (jp.linalg.norm(box_pos - gripper_pos) < 0.005),
+    # )
+    info["reached_box"] = 1.0 * (jp.linalg.norm(box_pos - gripper_pos) < 0.005)
 
     # Encourage closing the gripper only after it has reached the box.
     # gripper_opening = jp.mean(data.qpos[self._robot_qposadr[-2:]])
@@ -270,7 +270,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         "box_target": box_target * info["reached_box"],
         "no_floor_collision": no_floor_collision,
         # "gripper_close": gripper_close,
-        "robot_target_qpos": robot_target_qpos,
+        # "robot_target_qpos": robot_target_qpos,
     }
     return rewards
 
