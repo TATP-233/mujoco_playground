@@ -47,7 +47,7 @@ def default_config() -> config_dict.ConfigDict:
       ),
       vision=False,
       vision_config=default_vision_config(),
-      success_threshold=0.01,  # 0.03
+      success_threshold=0.01,
       impl='jax',
       nconmax=24 * 2048,
       njmax=128,
@@ -102,16 +102,16 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     # box_pos = self._init_obj_pos
     # print(f"init box pos={box_pos}")
     # initialize target position
-    # target_pos = (
-        # jax.random.uniform(
-            # rng_target,
-            # (3,),
-            # minval=jp.array([-0.0, -0.1, 0.05]),
-            # maxval=jp.array([0.1, 0.1, 0.1]),
-        # )
-        # + self._init_obj_pos
-    # )
-    target_pos = box_pos.at[2].add(0.02)
+    target_pos = (
+        jax.random.uniform(
+            rng_target,
+            (3,),
+            minval=jp.array([-0.0, -0.1, 0.02]),
+            maxval=jp.array([0.1, 0.1, 0.03]),
+        )
+        + self._init_obj_pos
+    )
+    # target_pos = box_pos.at[2].add(0.02)
 
     target_quat = jp.array([1.0, 0.0, 0.0, 0.0], dtype=float)
     if self._sample_orientation:
