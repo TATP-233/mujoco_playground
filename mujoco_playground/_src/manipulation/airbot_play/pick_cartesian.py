@@ -187,31 +187,20 @@ class AirbotPlayPickCubeCartesian(airbot_play.AirbotPlayBase):
     return state
 
   def _solve_cartesian_ik(self, qpos: jax.Array, target_pos: jax.Array) -> np.ndarray:
-        self._ik_data.qpos[:] = np.asarray(qpos)
-        mujoco.mj_forward(self._mj_model, self._ik_data)
+    self._ik_data.qpos[:] = np.asarray(qpos)
+    mujoco.mj_forward(self._mj_model, self._ik_data)
 
-        self._ik_solver.configuration.update(self._ik_data.qpos)
-        target_se3 = None
-        if hasattr(mink.SE3, "from_translation_quaternion"):
-            target_se3 = mink.SE3.from_translation_quaternion(
-                    np.asarray(target_pos), np.array([1.0, 0.0, 0.0, 0.0])
-            )
-        elif hasattr(mink.SE3, "from_translation"):
-            target_se3 = mink.SE3.from_translation(np.asarray(target_pos))
-        else:
-            target_se3 = mink.SE3.from_mocap_name(
-                    self._mj_model, self._ik_data, "mocap_target"
-            ).replace(p=np.asarray(target_pos))
-
-        self._ik_solver.end_effector_task.set_target(target_se3)
-        success = self._ik_solver.converge_ik()
-        if success:
-            arm_q = self._ik_solver.configuration.data.qpos[
-                    : self._robot_arm_qposadr.size
-            ]
-        else:
-            arm_q = self._ik_data.qpos[self._robot_arm_qposadr]
-        return np.array(arm_q, dtype=np.float32)
+    self._ik_solver.configuration.update(self._ik_data.qpos)
+    target_se3 = mink.SE3.from_translation(np.asarray(target_pos))
+    self._ik_solver.end_effector_task.set_target(target_se3)
+    success = self._ik_solver.converge_ik()
+    if success:
+        arm_q = self._ik_solver.configuration.data.qpos[
+                : self._robot_arm_qposadr.size
+        ]
+    else:
+        arm_q = self._ik_data.qpos[self._robot_arm_qposadr]
+    return np.array(arm_q, dtype=np.float32)
 
   def step(self, state: State, action: jax.Array) -> State:
     data_fk = mjx.forward(self._mjx_model, state.data)
