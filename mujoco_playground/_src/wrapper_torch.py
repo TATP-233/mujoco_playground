@@ -40,7 +40,7 @@ except ImportError:
 import torch
 import torch.utils.dlpack as tpack
 from etils import epath
-from gaussian_renderer import BatchSplatConfig, BatchSplatRenderer
+from gaussian_renderer import BatchSplatConfig, BatchSplatRenderer, MjxBatchSplatRenderer
 
 
 def _jax_to_torch(tensor):
@@ -308,7 +308,7 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
       background_ply=background_ply,
       minibatch=min(self.batch_size, int(256 // mj_model.ncam)) #256
     )
-    self.renderer = BatchSplatRenderer(cfg, mj_model=mj_model)
+    self.renderer = MjxBatchSplatRenderer(cfg, mj_model=mj_model)
     self.fovy_np = np.array(mj_model.cam_fovy)[None, :]
 
     if bg_img_template is not None:

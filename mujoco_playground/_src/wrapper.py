@@ -28,7 +28,7 @@ import numpy as np
 import torch
 import torch.utils.dlpack as tpack
 from etils import epath
-from gaussian_renderer import BatchSplatConfig, BatchSplatRenderer
+from gaussian_renderer import BatchSplatConfig, BatchSplatRenderer, MjxBatchSplatRenderer
 
 
 class Wrapper(mjx_env.MjxEnv):
@@ -322,7 +322,7 @@ class BatchSplatWrapper:
       background_ply=background_ply,
       minibatch=min(self.num_worlds, 256)
     )
-    self.renderer = BatchSplatRenderer(cfg, mj_model=mj_model)
+    self.renderer = MjxBatchSplatRenderer(cfg, mj_model=mj_model)
     
     if bg_img_template is not None:
       self.bg_img = bg_img_template.to(self.renderer.device).unsqueeze(0).expand(self.num_worlds, -1, -1, -1, -1).contiguous()
