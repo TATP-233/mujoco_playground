@@ -30,6 +30,7 @@ from mujoco_playground._src.manipulation.leap_hand import reorient as leap_cube_
 from mujoco_playground._src.manipulation.leap_hand import rotate_z as leap_rotate_z
 from mujoco_playground._src.manipulation.aero_hand import rotate_z as aero_hand_rotate_z
 from mujoco_playground._src.manipulation.airbot_play import pick as airbot_pick
+from mujoco_playground._src.manipulation.airbot_play import pick_cartesian as airbot_pick_cartesian
 from mujoco_playground._src.manipulation.universal_robots_ur5e_robotiq import pick as ur5e_pick
 from mujoco_playground._src.manipulation.franka_emika_panda import randomize_3dgs
 
@@ -45,6 +46,7 @@ _envs = {
     "LeapCubeRotateZAxis": leap_rotate_z.CubeRotateZAxis,
     "AeroCubeRotateZAxis": aero_hand_rotate_z.CubeRotateZAxis,
     "AirbotPlayPickCube": airbot_pick.AirbotPlayPickCube,
+    "AirbotPlayPickCubeCartesian": airbot_pick_cartesian.AirbotPlayPickCubeCartesian,
     "Ur5ePickCube": ur5e_pick.Ur5ePickCube,
 }
 
@@ -60,6 +62,7 @@ _cfgs = {
     "LeapCubeRotateZAxis": leap_rotate_z.default_config,
     "AeroCubeRotateZAxis": aero_hand_rotate_z.default_config,
     "AirbotPlayPickCube": airbot_pick.default_config,
+    "AirbotPlayPickCubeCartesian": airbot_pick_cartesian.default_config,
     "Ur5ePickCube": ur5e_pick.default_config,
 }
 
@@ -68,6 +71,7 @@ _randomizer = {
     "LeapCubeReorient": leap_cube_reorient.domain_randomize,
     "AeroCubeRotateZAxis": aero_hand_rotate_z.domain_randomize,
     "AirbotPlayPickCube": randomize_3dgs.domain_randomize,
+    "AirbotPlayPickCubeCartesian": randomize_3dgs.domain_randomize,
     "PandaPickCube": randomize_3dgs.domain_randomize,
 }
 
