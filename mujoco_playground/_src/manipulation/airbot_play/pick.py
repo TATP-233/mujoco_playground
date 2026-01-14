@@ -37,6 +37,8 @@ def default_config() -> config_dict.ConfigDict:
               box_target=10., #8.0,
               # Do not collide the gripper with the floor.
               no_floor_collision=0.25,
+              # Do not collide the gripper with the box.
+              no_box_collision=0.5,
               # Arm stays close to target pose.
               robot_target_qpos=0.015, #0.3
               gripper_open=2.0,
@@ -250,6 +252,14 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     # 这里使用平方使惩罚在偏离角度变大时迅速增加
     reward_ori = jp.square(jp.maximum(0.0, orientation_alignment))
 
+    # Penalize collision with box.
+    hand_box = (
+        data.sensordata[self._mj_model.sensor_adr[self._box_hand_found_sensor]]
+        > 0
+    )
+    no_box_collision = jp.where(hand_box, 0.0, 1.0)
+
+
     box_target = 1 - jp.tanh(5 * (0.9 * pos_err + 0.1 * rot_err))
     gripper_box = 1 - jp.tanh(5 * jp.linalg.norm(box_pos - gripper_pos))
     # robot_target_qpos = 1 - jp.tanh(
@@ -296,6 +306,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         "no_floor_collision": no_floor_collision,
         "gripper_close": gripper_close,
         "reward_ori": reward_ori,
+        "no_box_collision": no_box_collision,
         # "gripper_open": gripper_open,
         # "robot_target_qpos": robot_target_qpos,
     }
