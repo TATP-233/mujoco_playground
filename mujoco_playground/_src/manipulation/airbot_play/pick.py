@@ -42,8 +42,10 @@ def default_config() -> config_dict.ConfigDict:
               gripper_open=2.0,
               # Close the gripper after reaching the box.
               gripper_close=10.0,
+              # Orientation alignment reward.
+              reward_ori=10.0,
           ),
-          lifted_reward=2.0, #0.5,
+          lifted_reward=8.0,
           success_reward=10  #2.0,
       ),
       vision=False,
@@ -91,16 +93,16 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     rng, rng_box, rng_target = jax.random.split(rng, 3)
 
     # intialize box position
-    # box_pos = (
-    #     jax.random.uniform(
-    #         rng_box,
-    #         (3,),
-    #         minval=jp.array([-0.0, -0.1, 0.0]),
-    #         maxval=jp.array([0.1, 0.1, 0.0]),
-    #     )
-    #     + self._init_obj_pos
-    # )
-    box_pos = self._init_obj_pos
+    box_pos = (
+        jax.random.uniform(
+            rng_box,
+            (3,),
+            minval=jp.array([-0.0, -0.1, 0.0]),
+            maxval=jp.array([0.1, 0.1, 0.0]),
+        )
+        + self._init_obj_pos
+    )
+    # box_pos = self._init_obj_pos
     # print(f"init box pos={box_pos}")
     # initialize target position
     target_pos = (
@@ -146,7 +148,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         mocap_pos=data.mocap_pos.at[self._mocap_target, :].set(target_pos),
         mocap_quat=data.mocap_quat.at[self._mocap_target, :].set(target_quat),
     )
-
+    # jax.debug.print("eef z vector: {v}", v=data.site_xmat[self._gripper_site][:, 2])
     # initialize env state and info
     metrics = {
         "out_of_bounds": jp.array(0.0, dtype=float),
@@ -232,6 +234,21 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     target_mat = math.quat_to_mat(data.mocap_quat[self._mocap_target])
     rot_err = jp.linalg.norm(target_mat.ravel()[:6] - box_mat.ravel()[:6])
 
+    # 假设 current_rot 是末端执行器的 3x3 旋转矩阵
+    # 提取末端的 Z 轴（通常是矩阵的第三列）
+    end_effector_z_axis = data.site_xmat[self._gripper_site][:, 2]
+
+    # 目标向量是向下垂直 [0, 0, -1]
+    target_z_axis = jp.array([0.0, 0.0, -1.0])
+
+    # 计算余弦相似度（点积）
+    # 越接近 1 表示越垂直
+    orientation_alignment = jp.dot(end_effector_z_axis, target_z_axis)
+
+    # 奖励函数：只有当对齐度较好时才给分，或者作为一种惩罚
+    # 这里使用平方使惩罚在偏离角度变大时迅速增加
+    reward_ori = jp.square(jp.maximum(0.0, orientation_alignment))
+
     box_target = 1 - jp.tanh(5 * (0.9 * pos_err + 0.1 * rot_err))
     gripper_box = 1 - jp.tanh(5 * jp.linalg.norm(box_pos - gripper_pos))
     # robot_target_qpos = 1 - jp.tanh(
@@ -253,7 +270,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     #     info["reached_box"],
     #     (jp.linalg.norm(box_pos - gripper_pos) < 0.005),
     # )
-    info["reached_box"] = 1.0 * (jp.linalg.norm(box_pos - gripper_pos) < 0.005)
+    info["reached_box"] = 1.0 * (jp.linalg.norm(box_pos - gripper_pos) < 0.01)
+    # jax.debug.print("reached_box={r}", r=info["reached_box"])
 
     # Encourage closing the gripper only after it has reached the box.
     gripper_opening = jp.mean(data.qpos[self._robot_qposadr[-2:]])
@@ -266,12 +284,17 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
     gripper_close = gripper_box * (1 - jp.clip(gripper_opening / max_gripper_opening, 0.0, 1.0))
     # gripper_open = (1 - info["reached_box"]) * jp.clip(gripper_opening / max_gripper_opening, 0.0, 1.0)
-
+    # jax.debug.print(
+        # "gripper_open={g}, gripper_close={m}",
+        # g=gripper_open,
+        # m=gripper_close,
+    # )
     rewards = {
         "gripper_box": gripper_box,
         "box_target": box_target * info["reached_box"],
         "no_floor_collision": no_floor_collision,
         "gripper_close": gripper_close,
+        "reward_ori": reward_ori,
         # "gripper_open": gripper_open,
         # "robot_target_qpos": robot_target_qpos,
     }
