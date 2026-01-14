@@ -203,7 +203,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         })
 
     out_of_bounds = jp.any(jp.abs(box_pos) > 1.0)
-    out_of_bounds |= box_pos[2] < -0.002
+    out_of_bounds |= box_pos[2] < (state.info["init_box_pos"][2] - 0.01)
     has_non = jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
     done = out_of_bounds | has_non
     done = done.astype(float)
@@ -228,6 +228,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
   def _get_reward(self, data: mjx.Data, info: Dict[str, Any]) -> Dict[str, Any]:
     target_pos = info["target_pos"]
     box_pos = self._get_box_pos(data)
+    # jax.debug.print("box_pos={b}", b=box_pos)
     gripper_pos = data.site_xpos[self._gripper_site]
     pos_err = jp.linalg.norm(target_pos - box_pos)
     box_mat = data.xmat[self._obj_body]
