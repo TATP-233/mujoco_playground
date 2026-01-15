@@ -41,11 +41,11 @@ def default_config() -> config_dict.ConfigDict:
               no_box_collision=0.5,
               # Arm stays close to target pose.
               robot_target_qpos=0.015, #0.3
-              gripper_open=3.0,
+              gripper_open=0.5,
               # Close the gripper after reaching the box.
-              gripper_close=3.0,
+              gripper_close=20.0,
               # Orientation alignment reward.
-              reward_ori=2.0,
+              reward_ori=0.5,
           ),
           lifted_reward=8.0,
           success_reward=10.0  #2.0,
@@ -161,6 +161,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
            'reward/lifted': jp.array(0.0, dtype=float),
            'reward/success': jp.array(0.0, dtype=float),
            "has_non": False,
+           "reached_box": 0.0,
        })
 
     info = {"rng": rng, "target_pos": target_pos, "reached_box": 0.0, "init_box_pos": self._get_box_pos(data)}
@@ -210,6 +211,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     done = out_of_bounds | has_non
     done = done.astype(float)
     state.metrics.update({"has_non": has_non})
+    state.metrics.update({"reached_box": state.info["reached_box"]})
     state.metrics.update(
         **raw_rewards, out_of_bounds=out_of_bounds.astype(float)
     )
@@ -305,7 +307,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         "box_target": box_target * info["reached_box"],
         "no_floor_collision": no_floor_collision,
         "gripper_open": gripper_open,
-        "gripper_close": gripper_close,
+        # "gripper_close": gripper_close,
+        "gripper_close": gripper_close * info["reached_box"],
         "reward_ori": reward_ori,
         "no_box_collision": no_box_collision,
         # "robot_target_qpos": robot_target_qpos,
@@ -333,7 +336,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
   def _get_box_pos(self, data: mjx.Data) -> jax.Array:
     box_pos = data.xpos[self._obj_body]
-    return box_pos.at[2].add(-0.04)
+    return box_pos.at[2].add(-0.01)
 
   def _get_obs_vision(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
     gripper_pos = data.site_xpos[self._gripper_site]
