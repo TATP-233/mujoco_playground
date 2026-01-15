@@ -32,23 +32,23 @@ def default_config() -> config_dict.ConfigDict:
       reward_config=config_dict.create(
           scales=config_dict.create(
               # Gripper goes to the box.
-              gripper_box=4.0,
+              gripper_box=5.0,
               # Box goes to the target mocap.
-              box_target=10., #8.0,
+              box_target=5.0, #8.0,
               # Do not collide the gripper with the floor.
               no_floor_collision=0.25,
               # Do not collide the gripper with the box.
               no_box_collision=0.5,
               # Arm stays close to target pose.
               robot_target_qpos=0.015, #0.3
-              gripper_open=2.0,
+              gripper_open=3.0,
               # Close the gripper after reaching the box.
-              gripper_close=10.0,
+              gripper_close=3.0,
               # Orientation alignment reward.
-              reward_ori=10.0,
+              reward_ori=2.0,
           ),
           lifted_reward=8.0,
-          success_reward=10  #2.0,
+          success_reward=10.0  #2.0,
       ),
       vision=False,
       vision_config=default_vision_config(),
@@ -292,9 +292,9 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     #     g=gripper_opening,
     #     m=max_gripper_opening,
     # )
-
-    gripper_close = gripper_box * (1 - jp.clip(gripper_opening / max_gripper_opening, 0.0, 1.0))
-    # gripper_open = (1 - info["reached_box"]) * jp.clip(gripper_opening / max_gripper_opening, 0.0, 1.0)
+    gripper_ratio = jp.clip(gripper_opening / max_gripper_opening, 0.0, 1.0)
+    gripper_close = gripper_box * (1 - gripper_ratio)
+    gripper_open = (1 - gripper_box) * gripper_ratio
     # jax.debug.print(
         # "gripper_open={g}, gripper_close={m}",
         # g=gripper_open,
@@ -304,10 +304,10 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         "gripper_box": gripper_box,
         "box_target": box_target * info["reached_box"],
         "no_floor_collision": no_floor_collision,
+        "gripper_open": gripper_open,
         "gripper_close": gripper_close,
         "reward_ori": reward_ori,
         "no_box_collision": no_box_collision,
-        # "gripper_open": gripper_open,
         # "robot_target_qpos": robot_target_qpos,
     }
     return rewards
@@ -333,7 +333,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
   def _get_box_pos(self, data: mjx.Data) -> jax.Array:
     box_pos = data.xpos[self._obj_body]
-    return box_pos
+    return box_pos.at[2].add(-0.04)
 
   def _get_obs_vision(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
     gripper_pos = data.site_xpos[self._gripper_site]
