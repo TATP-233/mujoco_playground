@@ -236,6 +236,14 @@ class RSLRLBraxWrapper(VecEnv):
     return info
 
 
+def create_rgb_image(num, rgb_color, image_size):
+    if not all(0 <= color <= 1 for color in rgb_color):
+        raise ValueError("RGB颜色值必须在0到1之间")
+    height, width = image_size
+    image = np.full((num, height, width, 3), rgb_color, dtype=np.float32)
+    return image
+
+
 class BatchSplatWrapper(RSLRLBraxWrapper):
   """Wrapper for Brax environments that interop with torch and use 3DGS BatchSplatRenderer."""
 
@@ -282,16 +290,18 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
             body_gaussians = body_gaussians.to_dict()
         else:
           raise ValueError("BatchSplatWrapper requires body_gaussians in vision_config.")
-        if hasattr(c.vision_config, 'background'):
-          background_ply = c.vision_config.background
-        
-        if hasattr(c.vision_config, 'bg_img') and c.vision_config.bg_img is not None:
+        # if hasattr(c.vision_config, 'background'):
+          # background_ply = c.vision_config.background
+        background_ply = getattr(c.vision_config, 'background', None)
+        if getattr(c.vision_config, 'bg_img', None) is not None:
           bg = c.vision_config.bg_img
+          if isinstance(bg, tuple):
+            bg = create_rgb_image(mj_model.ncam, bg, (self.height, self.width))
           if isinstance(bg, np.ndarray):
             bg = torch.from_numpy(bg)
           elif not isinstance(bg, torch.Tensor):
             bg = torch.tensor(bg)
-          
+
           if bg.dtype == torch.uint8:
             bg = bg.float() / 255.0
           else:

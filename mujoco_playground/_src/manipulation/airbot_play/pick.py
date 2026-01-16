@@ -18,6 +18,7 @@ def default_vision_config() -> config_dict.ConfigDict:
       render_batch_size=1024,
       render_width=64,
       render_height=64,
+      bg_img=(1, 1, 1),
   )
 
 
