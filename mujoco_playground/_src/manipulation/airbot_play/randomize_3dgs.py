@@ -13,15 +13,14 @@
 # limitations under the License.
 # ==============================================================================
 """Randomization functions."""
-from typing import Tuple
 
 import jax
 import jax.numpy as jnp
 from mujoco import mjx
+from typing import Tuple
 from mujoco.mjx._src import math
-import numpy as np
 
-from mujoco_playground._src.manipulation.franka_emika_panda import pick_cartesian
+
 
 def perturb_orientation(
     key: jax.Array, original: jax.Array, deg: float
@@ -60,20 +59,13 @@ def perturb_orientation(
         return math.rotate(original, rot_offset)
     else:
         raise ValueError(f'Invalid input shape: {original.shape}. Expected (3,) or (4,).')
+
+
 def domain_randomize(
     mjx_model: mjx.Model, num_worlds: int = None, rng=None
 ) -> Tuple[mjx.Model, mjx.Model]:
-  """支持多相机的域随机化，适配 Madrona BatchRenderer。"""
-  
-  # 设置 in_axes，确保渲染器知道这些属性是按 batch (num_worlds) 划分的
-  in_axes = jax.tree_util.tree_map(lambda x: None, mjx_model)
-  in_axes = in_axes.tree_replace({
-      'cam_pos': 0,
-      'cam_quat': 0,
-  })
-  
-  # if rng is None:
-  #   rng = jax.random.key(0)
+  """支持多相机的域随机化，适配 BatchRenderer。"""
+
   if num_worlds is None:
     assert rng is not None
   else:
@@ -83,7 +75,6 @@ def domain_randomize(
 
   @jax.vmap
   def rand(rng: jax.Array):
-    """为单张地图中的所有相机生成随机化字段。"""
     _, key = jax.random.split(rng, 2)
 
     #### 多相机随机化 ####
@@ -110,10 +101,16 @@ def domain_randomize(
   # 结果形状: cam_pos -> (num_worlds, num_cams, 3), cam_quat -> (num_worlds, num_cams, 4)
   cam_pos, cam_quat = rand(rng)
 
-  # 替换模型中的字段
+  in_axes: mjx.Model = jax.tree.map(lambda x: None, mjx_model)
+  in_axes = in_axes.tree_replace({
+      'cam_pos': 0,
+      'cam_quat': 0,
+  })
+
   mjx_model = mjx_model.tree_replace({
     'cam_pos': cam_pos,
     'cam_quat': cam_quat,
   })
-
+#   jax.debug.print("cam_pos: {c}", c=mjx_model.cam_pos)
+#   print("?? why no print")
   return mjx_model, in_axes

@@ -225,6 +225,7 @@ def main(argv):
 
   # Domain randomization
   randomizer = registry.get_domain_randomizer(_ENV_NAME.value) if _USE_DR.value else None
+  print(f"Using domain randomizer: {randomizer}")
 
   # We'll store environment states during rendering
   render_trajectory = []
@@ -353,7 +354,7 @@ def main(argv):
         env_cfg.episode_length,
         1,
         render_callback=None,
-        randomization_fn=None,
+        randomization_fn=randomizer,
         device_rank=device_rank,
     )
     # BatchSplatWrapper's reset/step return TensorDict, not jax state
