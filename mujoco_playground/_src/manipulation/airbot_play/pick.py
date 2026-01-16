@@ -99,8 +99,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         jax.random.uniform(
             rng_box,
             (3,),
-            minval=jp.array([-0.0, -0.01, 0.0]),
-            maxval=jp.array([0.0, 0.01, 0.0]),
+            minval=jp.array([-0.01, -0.01, 0.0]),
+            maxval=jp.array([0.01, 0.01, 0.0]),
         )
         + self._init_obj_pos
     )
