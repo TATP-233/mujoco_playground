@@ -177,8 +177,8 @@ def main(argv):
     device_rank = int(device.split(":")[-1]) if "cuda" in device else 0
 
   # If play-only, use fewer envs
-  if _PLAY_ONLY.value:
-    num_envs = 64 if _VISION.value else 1
+  if _PLAY_ONLY.value:    
+      num_envs = min(64, _NUM_ENVS.value) if _VISION.value else 1
   else:
     num_envs = _NUM_ENVS.value
 
