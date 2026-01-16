@@ -175,8 +175,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
   def step(self, state: State, action: jax.Array) -> State:
     delta = action * self._action_scale
-    if self._vision:
-        delta = delta.at[-1].set(jp.where(delta[-1] < 0, -1.0, 1.0) * 0.02) # up to 2 cm movement per ctrl.
+    # if self._vision:
+    #     delta = delta.at[-1].set(jp.where(delta[-1] < 0, -1.0, 1.0) * 0.02) # up to 2 cm movement per ctrl.
 
     ctrl = state.data.ctrl + delta
     ctrl = jp.clip(ctrl, self._lowers, self._uppers)
@@ -238,15 +238,15 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     rot_err = jp.linalg.norm(target_mat.ravel()[:6] - box_mat.ravel()[:6])
 
     # 假设 current_rot 是末端执行器的 3x3 旋转矩阵
-    # 提取末端的 Z 轴（通常是矩阵的第三列）
-    end_effector_z_axis = data.site_xmat[self._gripper_site][:, 2]
+    # 提取末端的 X 轴
+    end_effector_x_axis = data.site_xmat[self._gripper_site][:, 0]
 
-    # 目标向量是向下垂直 [0, 0, -1]
-    target_z_axis = jp.array([0.0, 0.0, -1.0])
+    # 目标向量是向下垂直
+    target_x_axis = jp.array([-1.0, 0.0, 0.0])
 
     # 计算余弦相似度（点积）
     # 越接近 1 表示越垂直
-    orientation_alignment = jp.dot(end_effector_z_axis, target_z_axis)
+    orientation_alignment = jp.dot(end_effector_x_axis, target_x_axis)
 
     # 奖励函数：只有当对齐度较好时才给分，或者作为一种惩罚
     # 这里使用平方使惩罚在偏离角度变大时迅速增加
@@ -258,7 +258,6 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         > 0
     )
     no_box_collision = jp.where(hand_box, 0.0, 1.0)
-
 
     box_target = 1 - jp.tanh(5 * (0.9 * pos_err + 0.1 * rot_err))
     gripper_box = 1 - jp.tanh(5 * jp.linalg.norm(box_pos - gripper_pos))
