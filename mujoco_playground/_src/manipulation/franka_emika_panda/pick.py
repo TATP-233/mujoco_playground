@@ -197,6 +197,7 @@ class PandaPickCube(panda.PandaBase):
 
     reward = jp.clip(sum(rewards.values()), -1e4, 1e4)
     box_pos = data.xpos[self._obj_body]
+    success = False
     if self._vision:
         # Sparse rewards
         lifted = (box_pos[2] > 0.05) * self._config.reward_config.lifted_reward
@@ -210,7 +211,7 @@ class PandaPickCube(panda.PandaBase):
 
     out_of_bounds = jp.any(jp.abs(box_pos) > 1.0)
     out_of_bounds |= box_pos[2] < 0.0
-    done = out_of_bounds | jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
+    done = out_of_bounds | jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any() | success
     done = done.astype(float)
 
     state.metrics.update(
