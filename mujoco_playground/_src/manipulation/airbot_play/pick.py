@@ -45,8 +45,8 @@ def default_config() -> config_dict.ConfigDict:
               gripper_open=0.5,
               # Close the gripper after reaching the box.
               gripper_close=20.0,
-              # Orientation alignment reward.
-              reward_ori=0.5,
+            #   # Orientation alignment reward.
+            #   reward_ori=0.5,
           ),
           lifted_reward=8.0,
           success_reward=10.0  #2.0,
@@ -240,21 +240,6 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     target_mat = math.quat_to_mat(data.mocap_quat[self._mocap_target])
     rot_err = jp.linalg.norm(target_mat.ravel()[:6] - box_mat.ravel()[:6])
 
-    # 假设 current_rot 是末端执行器的 3x3 旋转矩阵
-    # 提取末端的 Z 轴（通常是矩阵的第三列）
-    end_effector_z_axis = data.site_xmat[self._gripper_site][:, 2]
-
-    # 目标向量是向下垂直 [0, 0, -1]
-    target_z_axis = jp.array([0.0, 0.0, -1.0])
-
-    # 计算余弦相似度（点积）
-    # 越接近 1 表示越垂直
-    orientation_alignment = jp.dot(end_effector_z_axis, target_z_axis)
-
-    # 奖励函数：只有当对齐度较好时才给分，或者作为一种惩罚
-    # 这里使用平方使惩罚在偏离角度变大时迅速增加
-    reward_ori = jp.square(jp.maximum(0.0, orientation_alignment))
-
     # Penalize collision with box.
     hand_box = (
         data.sensordata[self._mj_model.sensor_adr[self._box_hand_found_sensor]]
@@ -310,7 +295,6 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         "gripper_open": gripper_open,
         # "gripper_close": gripper_close,
         "gripper_close": gripper_close * info["reached_box"],
-        "reward_ori": reward_ori,
         "no_box_collision": no_box_collision,
         # "robot_target_qpos": robot_target_qpos,
     }

@@ -21,7 +21,6 @@ from typing import Tuple
 from mujoco.mjx._src import math
 
 
-
 def perturb_orientation(
     key: jax.Array, original: jax.Array, deg: float
 ) -> jax.Array:
@@ -32,7 +31,7 @@ def perturb_orientation(
         jax.random.uniform(key_y, (), minval=0, maxval=1)
     )
     perturb_axis = perturb_axis / (jnp.linalg.norm(perturb_axis) + 1e-6)
-    perturb_theta = jax.random.uniform(key_theta, (), minval=0, maxval=jnp.deg2rad(deg))    
+    perturb_theta = jax.random.uniform(key_theta, (), minval=0, maxval=jnp.deg2rad(deg))
     rot_offset = math.axis_angle_to_quat(perturb_axis, perturb_theta)    
     if original.shape[-1] == 4:
         return math.quat_mul(rot_offset, original)
