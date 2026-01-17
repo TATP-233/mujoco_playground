@@ -57,13 +57,15 @@ def domain_randomize(
   def rand(rng: jax.Array):
     _, key = jax.random.split(rng, 2)
     key_pos, key_ori = jax.random.split(key, 2)
+    pos_dr = 0.05
+    ori_dr = 10
     cam_offsets = jax.random.uniform(
-        key_pos, (num_cams, 3), minval=-0.05, maxval=0.05
+        key_pos, (num_cams, 3), minval=-pos_dr, maxval=pos_dr
     )
     cam_pos = mjx_model.cam_pos + cam_offsets
     keys_ori = jax.random.split(key_ori, num_cams)
     cam_quat = jax.vmap(perturb_orientation, in_axes=(0, 0, None))(
-        keys_ori, mjx_model.cam_quat, 10
+        keys_ori, mjx_model.cam_quat, ori_dr
     )
     return cam_pos, cam_quat
 
