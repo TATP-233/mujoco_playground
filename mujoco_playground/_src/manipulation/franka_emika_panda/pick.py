@@ -106,8 +106,8 @@ class PandaPickCube(panda.PandaBase):
         jax.random.uniform(
             rng_box,
             (3,),
-            minval=jp.array([-0.1, -0.1, 0.0]),
-            maxval=jp.array([0.1, 0.1, 0.0]),
+            minval=jp.array([-0.05, -0.05, 0.0]),
+            maxval=jp.array([0.05, 0.05, 0.0]),
         )
         + self._init_obj_pos
     )
@@ -117,8 +117,8 @@ class PandaPickCube(panda.PandaBase):
         jax.random.uniform(
             rng_target,
             (3,),
-            minval=jp.array([-0.1, -0.1, 0.2]),
-            maxval=jp.array([0.1, 0.1, 0.4]),
+            minval=jp.array([-0.0, -0.0, 0.2]),
+            maxval=jp.array([0.0, 0.0, 0.3]),
         )
         + self._init_obj_pos
     )

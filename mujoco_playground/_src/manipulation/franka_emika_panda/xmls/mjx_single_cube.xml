@@ -2,8 +2,9 @@
   <include file="mjx_scene.xml"/>
 
   <worldbody>
-    <camera name="right" pos="0.488 -0.845 0.397" xyaxes="1.000 0.021 0.000 -0.006 0.272 0.962"/>
-    <camera name="front_left" pos="0.919 0.600 0.338" xyaxes="-0.792 0.611 0.000 -0.175 -0.227 0.958"/>
+    <camera name="right" pos="0.488 -0.645 0.397" xyaxes="1.000 0.021 0.000 -0.006 0.272 0.962"/>
+    <camera name="front" pos="1.0 0.0 0.26" xyaxes="0.0 1.0 0.0 -0.188 -0.199 0.962"/>
+    <!-- <camera name="front_left" pos="0.919 0.600 0.338" xyaxes="-0.792 0.611 0.000 -0.175 -0.227 0.958"/> -->
 
     <body name="box" pos="0.5 0 0.03">
       <freejoint/>
