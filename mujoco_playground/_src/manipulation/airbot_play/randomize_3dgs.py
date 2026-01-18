@@ -57,8 +57,8 @@ def domain_randomize(
   def rand(rng: jax.Array):
     _, key = jax.random.split(rng, 2)
     key_pos, key_ori = jax.random.split(key, 2)
-    pos_dr = 0.05
-    ori_dr = 10
+    pos_dr = 0.01
+    ori_dr = 2
     cam_offsets = jax.random.uniform(
         key_pos, (num_cams, 3), minval=-pos_dr, maxval=pos_dr
     )

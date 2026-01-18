@@ -167,7 +167,7 @@ class PandaPickCube(panda.PandaBase):
            'reward/success': jp.array(0.0, dtype=float),
        })
 
-    info = {"rng": rng, "target_pos": target_pos, "reached_box": 0.0}
+    info = {"rng": rng, "target_pos": target_pos, "reached_box": 0.0, "init_box_pos": box_pos}
     if self._vision:
         obs = self._get_obs_vision(data, info)
     else:
@@ -210,7 +210,7 @@ class PandaPickCube(panda.PandaBase):
         })
 
     out_of_bounds = jp.any(jp.abs(box_pos) > 1.0)
-    out_of_bounds |= box_pos[2] < 0.0
+    out_of_bounds |= box_pos[2] < (state.info["init_box_pos"][2] - 0.01)
     done = out_of_bounds | jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any() | success
     done = done.astype(float)
 
