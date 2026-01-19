@@ -143,9 +143,10 @@ def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int
       background_name = "ribbon_blue.ply"
       gaussians_name["box"] = "green_cube.ply"
   elif "AirbotPlay" in env_name:
+    # reso = "224_lab2"
+    background_name = "background.ply" if reso == "224_lab2" else "ribbon_blue.ply"
     assets_name = "airbot_play"
     bodies = ["arm_base", "link1", "link2", "link3", "link4", "link5", "link6", "left", "right"]
-    background_name = "ribbon_blue.ply"
     gaussians_name["box"] = "green_cube.ply"
 
   assets_path = mjx_env.ROOT_PATH / "manipulation" / assets_name / "3dgs"
