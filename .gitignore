@@ -11,4 +11,4 @@ rslrl-training-logs/
 assets/
 mujoco_playground/experimental/madrona_benchmarking/get_data.sh
 *.mp4
-background_images/
+# background_images/
