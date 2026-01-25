@@ -18,6 +18,7 @@
 from datetime import datetime
 import json
 import os
+import sys
 
 from absl import app
 from absl import flags
@@ -96,6 +97,12 @@ _WP_KERNEL_CACHE_DIR = flags.DEFINE_string(
 )
 _VISION = flags.DEFINE_boolean("vision", False, "Use vision input.")
 _USE_DR = flags.DEFINE_boolean("use_dr", False, "Use domain randomization.")
+_SAVE_BG = flags.DEFINE_boolean(
+    "save_bg", False, "If true, just save the background images."
+)
+_USE_BG = flags.DEFINE_boolean(
+    "use_bg", False, "If true, use background images."
+)
 
 def get_rl_config(env_name: str) -> config_dict.ConfigDict:
   if env_name in registry.manipulation._envs:
@@ -122,7 +129,7 @@ def tile(img, d):
   return img
 
 
-def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int):
+def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int, background_image_dir: str):
   env_cfg.vision = True
   env_cfg.vision_config.render_batch_size = num_envs
   env_cfg.vision_config.render_width = 64
@@ -143,7 +150,7 @@ def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int
       background_name = "ribbon_blue.ply"
       gaussians_name["box"] = "green_cube.ply"
   elif "AirbotPlay" in env_name:
-    # reso = "224_lab2"
+    reso = "224_lab2"
     background_name = "background.ply" if reso == "224_lab2" else "ribbon_blue.ply"
     assets_name = "airbot_play"
     bodies = ["arm_base", "link1", "link2", "link3", "link4", "link5", "link6", "left", "right"]
@@ -151,11 +158,20 @@ def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int
 
   assets_path = mjx_env.ROOT_PATH / "manipulation" / assets_name / "3dgs"
   print(f"3DGS assets path: {assets_path.as_posix()}")
-  body_gaussians = {b: (assets_path / reso / f"{b}.ply").as_posix() for b in bodies}
+
+  if _USE_BG.value:
+    if not os.path.exists(background_image_dir):
+      raise ValueError(f"Background image directory '{background_image_dir}' does not exist.")
+    env_cfg.vision_config.bg_img = background_image_dir
+  else:
+    env_cfg.vision_config.background = (assets_path / background_name).as_posix()
   
-  env_cfg.vision_config.background = (assets_path / background_name).as_posix()
-  for k, v in gaussians_name.items():
-    body_gaussians[k] = (assets_path / v).as_posix()
+  if _SAVE_BG.value:
+    body_gaussians = {}
+  else:  
+    body_gaussians = {b: (assets_path / reso / f"{b}.ply").as_posix() for b in bodies}
+    for k, v in gaussians_name.items():
+      body_gaussians[k] = (assets_path / v).as_posix()
 
   env_cfg.vision_config.body_gaussians = ConfigDict(body_gaussians)
 
@@ -164,6 +180,7 @@ def main(argv):
   del argv  # unused
 
   project_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../")
+  background_image_dir = f"background_images/{_ENV_NAME.value}"
 
   wp.config.kernel_cache_dir = _WP_KERNEL_CACHE_DIR.value
 
@@ -187,7 +204,7 @@ def main(argv):
   env_cfg = registry.get_default_config(_ENV_NAME.value)
 
   if _VISION.value:
-    configure_3dgs(env_cfg, _ENV_NAME.value, num_envs)
+    configure_3dgs(env_cfg, _ENV_NAME.value, num_envs, background_image_dir)
   print(f"Environment config:\n{env_cfg}")
 
   # Generate unique experiment name
@@ -367,6 +384,13 @@ def main(argv):
     def get_pixel_frame(obs_td):
       # Stack all views: [num_envs, num_cameras, H, W, 3]
       imgs = [obs_td[k].cpu().numpy() for k in pixel_keys]
+      # save images to png
+      if _SAVE_BG.value:
+        os.makedirs(background_image_dir, exist_ok=True)
+        for i, img in enumerate(imgs):
+          media.write_image(f"{background_image_dir}/view_{i}.png", img[0])
+        print(f"Background images saved to '{background_image_dir}'. Exiting.")
+        sys.exit(0)
       return np.stack(imgs, axis=1)
     
     pixel_frames = [get_pixel_frame(obs_torch)]

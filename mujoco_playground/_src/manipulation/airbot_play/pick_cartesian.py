@@ -7,7 +7,7 @@ import jax.numpy as jp
 import mink
 import mujoco
 import numpy as np
-from gs_playground.mink_ik.mink_arm_ik import MinkIK
+# from gs_playground.mink_ik.mink_arm_ik import MinkIK
 from ml_collections import config_dict
 from mujoco import mjx
 from mujoco.mjx._src import math

@@ -41,7 +41,7 @@ import torch
 import torch.utils.dlpack as tpack
 from etils import epath
 from gaussian_renderer import BatchSplatConfig, BatchSplatRenderer, MjxBatchSplatRenderer
-
+import mediapy as media
 
 def _jax_to_torch(tensor):
   import torch.utils.dlpack as tpack  # pytype: disable=import-error # pylint: disable=import-outside-toplevel
@@ -290,13 +290,17 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
             body_gaussians = body_gaussians.to_dict()
         else:
           raise ValueError("BatchSplatWrapper requires body_gaussians in vision_config.")
-        # if hasattr(c.vision_config, 'background'):
-          # background_ply = c.vision_config.background
-        background_ply = getattr(c.vision_config, 'background', None)
         if getattr(c.vision_config, 'bg_img', None) is not None:
           bg = c.vision_config.bg_img
           if isinstance(bg, tuple):
             bg = create_rgb_image(mj_model.ncam, bg, (self.height, self.width))
+          elif isinstance(bg, (str, epath.Path)):
+            print(f"Loading background images from directory: {bg}")
+            images = {file.stem: media.read_image(file) for file in epath.Path(bg).iterdir()}
+            bg_list = []
+            for i in range(mj_model.ncam):
+              bg_list.append(images[f'view_{i}'])
+            bg = np.array(bg_list)
           if isinstance(bg, np.ndarray):
             bg = torch.from_numpy(bg)
           elif not isinstance(bg, torch.Tensor):
@@ -315,7 +319,7 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
 
     cfg = BatchSplatConfig(
       body_gaussians=body_gaussians,
-      background_ply=background_ply,
+      background_ply=getattr(c.vision_config, 'background', None),
       minibatch=min(self.batch_size, int(256 // mj_model.ncam)) #256
     )
     self.renderer = MjxBatchSplatRenderer(cfg, mj_model=mj_model)
