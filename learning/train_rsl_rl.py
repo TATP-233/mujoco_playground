@@ -103,6 +103,9 @@ _SAVE_BG = flags.DEFINE_boolean(
 _USE_BG = flags.DEFINE_boolean(
     "use_bg", False, "If true, use background images."
 )
+_RESOURCE = flags.DEFINE_string(
+    "resource", "224_lab2", "Resource name."
+)
 
 def get_rl_config(env_name: str) -> config_dict.ConfigDict:
   if env_name in registry.manipulation._envs:
@@ -150,7 +153,7 @@ def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int
       background_name = "ribbon_blue.ply"
       gaussians_name["box"] = "green_cube.ply"
   elif "AirbotPlay" in env_name:
-    reso = "224_lab2"
+    reso = _RESOURCE.value
     background_name = "background.ply" if reso == "224_lab2" else "ribbon_blue.ply"
     assets_name = "airbot_play"
     bodies = ["arm_base", "link1", "link2", "link3", "link4", "link5", "link6", "left", "right"]
