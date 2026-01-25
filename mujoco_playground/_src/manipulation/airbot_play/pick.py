@@ -101,7 +101,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
             rng_box,
             (3,),
             minval=jp.array([-0.05, -0.05, 0.0]),
-            maxval=jp.array([0.05, 0.05, 0.0]),
+            maxval=jp.array([0.0, 0.05, 0.0]),
         )
         + self._init_obj_pos
     )

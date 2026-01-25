@@ -165,10 +165,11 @@ def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int
   if _USE_BG.value:
     if not os.path.exists(background_image_dir):
       raise ValueError(f"Background image directory '{background_image_dir}' does not exist.")
-    env_cfg.vision_config.bg_img = background_image_dir
+    bg_img = background_image_dir
   else:
+    bg_img = (1, 1, 1)
     env_cfg.vision_config.background = (assets_path / background_name).as_posix()
-  
+  env_cfg.vision_config.bg_img = bg_img
   if _SAVE_BG.value:
     body_gaussians = {}
   else:  
