@@ -41,6 +41,10 @@ from tensordict import TensorDict
 import warp as wp
 from actor_critic_cnn import ActorCriticCNN
 import rsl_rl.modules
+import json
+from typing import Union, List
+from pathlib import Path
+
 
 # Register the class in rsl_rl.modules so it can be found via full path
 rsl_rl.modules.ActorCriticCNN = ActorCriticCNN
@@ -118,6 +122,38 @@ def set_seed(seed: int):
   if torch.cuda.is_available():
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+def save_current_command(
+    json_path: str, key: str, as_list: bool = False
+) -> Union[str, List[str]]:
+    """
+    Save the command used to execute the current script to a specified JSON file under a given key.
+    Args:
+        json_path (str): Path to the target JSON file (directories will be created if needed)
+        key (str): The key in the JSON file under which to store the command
+        as_list (bool):
+            - If True, save as a list of command components (e.g., ["python", "script.py", "--arg", "val"])
+            - If False (default), save as a single string (e.g., "python script.py --arg val")
+    Returns:
+        Union[str, List[str]]: The command representation that was saved
+    """
+    command = [sys.executable] + sys.argv
+    command_repr = command if as_list else " ".join(command)
+
+    Path(json_path).parent.mkdir(parents=True, exist_ok=True)
+
+    if Path(json_path).exists():
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    else:
+        data = {}
+
+    data[key] = command_repr
+
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+
+    # print(f"[INFO] Saved current command to {json_path} under key '{key}'")
+    return command_repr
 
 
 def get_rl_config(env_name: str) -> config_dict.ConfigDict:
@@ -259,6 +295,8 @@ def main(argv):
       os.path.join(ckpt_path, "config.json"), "w", encoding="utf-8"
   ) as fp:
     json.dump(env_cfg.to_dict(), fp, indent=4)
+  if not _PLAY_ONLY.value:
+    print("command="+save_current_command("command.json", exp_name))
 
   # Domain randomization
   randomizer = registry.get_domain_randomizer(_ENV_NAME.value) if _USE_DR.value else None

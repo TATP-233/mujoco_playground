@@ -17,7 +17,8 @@ for ckpt in "${ckpt_list[@]}"; do
         --vision=True \
         --num_envs=2048 \
         --play_only \
-        # --use_dr \
+        --use_dr \
+        --use_bg \
         --load_run_name=${env_name}-${stamp} \
         --checkpoint_num=${ckpt}
 done
