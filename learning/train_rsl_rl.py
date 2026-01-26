@@ -18,6 +18,7 @@
 from datetime import datetime
 import json
 import os
+import random
 import sys
 
 from absl import app
@@ -107,6 +108,18 @@ _RESOURCE = flags.DEFINE_string(
     "resource", "224_lab2", "Resource name."
 )
 
+
+def set_seed(seed: int):
+  random.seed(seed)
+  np.random.seed(seed)
+  torch.manual_seed(seed)
+  os.environ['PYTHONHASHSEED'] = str(seed)
+
+  if torch.cuda.is_available():
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
 def get_rl_config(env_name: str) -> config_dict.ConfigDict:
   if env_name in registry.manipulation._envs:
     return manipulation_params.rsl_rl_config(env_name)
@@ -182,6 +195,8 @@ def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int
 def main(argv):
   """Run training and evaluation for the specified environment using RSL-RL."""
   del argv  # unused
+
+  set_seed(_SEED.value)
 
   project_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../")
   background_image_dir = f"background_images/{_ENV_NAME.value}"
