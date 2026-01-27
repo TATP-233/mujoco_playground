@@ -208,6 +208,7 @@ def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int
     assets_name = "airbot_play"
     bodies = ["arm_base", "link1", "link2", "link3", "link4", "link5", "link6", "left", "right"]
     gaussians_name["box"] = "green_cube.ply"
+    reso = "224_lab2"  # use lab2 bodies for Airbot
 
   assets_path = mjx_env.ROOT_PATH / "manipulation" / assets_name / "3dgs"
   print(f"3DGS assets path: {assets_path.as_posix()}")
