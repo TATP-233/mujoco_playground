@@ -37,27 +37,28 @@ def default_config() -> config_dict.ConfigDict:
       reward_config=config_dict.create(
           scales=config_dict.create(
               # Gripper goes to the box.
-              gripper_box=5.0,
+              gripper_box=4.0,
               # Box goes to the target mocap.
-              box_target=5.0, #8.0,
+              box_target=8.0, #8.0,
               # Do not collide the gripper with the floor.
-              no_floor_collision=0.25,
+              no_floor_collision=5.0,
               # Do not collide the gripper with the box.
               no_box_collision=0.5,
               # Arm stays close to target pose.
               robot_target_qpos=0.015, #0.3
               gripper_open=0.5,
               # Close the gripper after reaching the box.
-              gripper_close=20.0,
-            #   # Orientation alignment reward.
-            #   reward_ori=0.5,
+              gripper_close=3.0,
+              #   # Orientation alignment reward.
+              #   reward_ori=0.5,
+              lifted=1.5,
+              success=20.0,  #2.0,
+            #   gripper_ctrl=3.0,
           ),
-          lifted_reward=8.0,
-          success_reward=10.0  #2.0,
       ),
       vision=False,
       vision_config=default_vision_config(),
-      success_threshold=0.01,
+      success_threshold=0.05,
       impl='jax',
       nconmax=24 * 2048,
       njmax=128,
@@ -95,17 +96,25 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         self._mj_model.sensor(f"{geom}_floor_found").id
         for geom in ["left_finger_pad", "right_finger_pad", "hand_box"]
     ]
+    self.idx_box_zaxis = self._get_sensor_slice("box_zaxis")
+
+  def _get_sensor_slice(self, name):
+    idx = self._mj_model.sensor(name).id
+    adr = self._mj_model.sensor_adr[idx]
+    dim = self._mj_model.sensor_dim[idx]
+    return slice(adr, adr + dim)
 
   def reset(self, rng: jax.Array) -> State:
     rng, rng_box, rng_target = jax.random.split(rng, 3)
 
     # intialize box position
+    self._box_random_range = 0.05
     box_pos = (
         jax.random.uniform(
             rng_box,
             (3,),
-            minval=jp.array([-0.05, -0.05, 0.0]),
-            maxval=jp.array([0.05, 0.05, 0.0]),
+            minval=jp.array([-0.0, -self._box_random_range, 0.0]),
+            maxval=jp.array([0.0, self._box_random_range, 0.0]),
         )
         + self._init_obj_pos
     )
@@ -116,8 +125,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         jax.random.uniform(
             rng_target,
             (3,),
-            minval=jp.array([-0.0, -0.0, 0.02]),
-            maxval=jp.array([0.0, 0.0, 0.05]),
+            minval=jp.array([-0.0, -0.0, 0.1]),
+            maxval=jp.array([0.0, 0.0, 0.12]),
         )
         + self._init_obj_pos
     )
@@ -163,9 +172,6 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     }
     if self._vision:
        metrics.update({
-           'reward/lifted': jp.array(0.0, dtype=float),
-           'reward/success': jp.array(0.0, dtype=float),
-           "has_non": False,
            "reached_box": 0.0,
        })
 
@@ -196,26 +202,18 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         k: v * self._config.reward_config.scales[k]
         for k, v in raw_rewards.items()
     }
-
     reward = jp.clip(sum(rewards.values()), -1e4, 1e4)
+    
+    init_box_pos = state.info["init_box_pos"]
     box_pos = self._get_box_pos(data)
-    if self._vision:
-        # Sparse rewards
-        lifted = (box_pos[2] > (state.info["init_box_pos"][2] + 0.005)) * self._config.reward_config.lifted_reward * state.info["reached_box"]
-        reward += lifted
-        success = self._get_success(data, state.info)
-        reward += success * self._config.reward_config.success_reward
-        state.metrics.update({
-            'reward/lifted': lifted.astype(float),
-            'reward/success': success.astype(float),
-        })
-
-    out_of_bounds = jp.any(jp.abs(box_pos) > 1.0)
-    out_of_bounds |= box_pos[2] < (state.info["init_box_pos"][2] - 0.01)
-    has_non = jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
-    done = out_of_bounds | has_non | success
+    out_of_bounds = jp.abs(box_pos[0] - init_box_pos[0]) > (self._box_random_range + 0.01)
+    out_of_bounds |= jp.abs(box_pos[1] - init_box_pos[1]) > (self._box_random_range + 0.01)
+    out_of_bounds |= box_pos[2] < 0.0
+    box_zaxis = data.sensordata[self.idx_box_zaxis]
+    bad_orientation = box_zaxis[2] < 0.5
+    done = out_of_bounds | bad_orientation
     done = done.astype(float)
-    state.metrics.update({"has_non": has_non})
+
     state.metrics.update({"reached_box": state.info["reached_box"]})
     state.metrics.update(
         **raw_rewards, out_of_bounds=out_of_bounds.astype(float)
@@ -251,9 +249,12 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     )
     no_box_collision = jp.where(hand_box, 0.0, 1.0)
 
-
-    box_target = 1 - jp.tanh(5 * (0.9 * pos_err + 0.1 * rot_err))
-    gripper_box = 1 - jp.tanh(5 * jp.linalg.norm(box_pos - gripper_pos))
+    gripper_box_dist = jp.linalg.norm(box_pos - gripper_pos)
+    # Reward approaching the box.
+    gripper_box = 1.0 - jp.tanh(15.0 * gripper_box_dist)
+    # Reward bringing the box to the target.
+    box_target_dist = jp.linalg.norm(target_pos - box_pos)
+    box_target = 1.0 - jp.tanh(10.0 * box_target_dist)
     # robot_target_qpos = 1 - jp.tanh(
     #     jp.linalg.norm(
     #         data.qpos[self._robot_arm_qposadr]
@@ -263,44 +264,51 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
     # Check for collisions with the floor
     hand_floor_collision = [
-        data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
+        data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0.5
         for sensor_id in self._floor_hand_found_sensor
     ]
-    floor_collision = sum(hand_floor_collision) > 0
-    no_floor_collision = (1 - floor_collision).astype(float)
+    floor_collision = jp.any(jp.array(hand_floor_collision))
+    no_floor_collision = -1.0 * floor_collision.astype(float)
 
     # info["reached_box"] = 1.0 * jp.maximum(
     #     info["reached_box"],
     #     (jp.linalg.norm(box_pos - gripper_pos) < 0.005),
     # )
-    info["reached_box"] = 1.0 * (jp.linalg.norm(box_pos - gripper_pos) < 0.01)
+    # set the threshold the same as the half size of the box (0.015m)
+    info["reached_box"] = 1.0 * (jp.linalg.norm(box_pos - gripper_pos) < 0.015)
     # jax.debug.print("reached_box={r}", r=info["reached_box"])
 
     # Encourage closing the gripper only after it has reached the box.
-    gripper_opening = jp.mean(data.qpos[self._robot_qposadr[-2:]])
-    max_gripper_opening = jp.asarray(self._uppers[-1])
+    # gripper_opening = jp.mean(data.qpos[self._robot_qposadr[-2:]])
+    # max_gripper_opening = jp.asarray(self._uppers[-1])
     # jax.debug.print(
     #     "gripper_opening={g}, max_gripper_opening={m}",
     #     g=gripper_opening,
     #     m=max_gripper_opening,
     # )
-    gripper_ratio = jp.clip(gripper_opening / max_gripper_opening, 0.0, 1.0)
-    gripper_close = gripper_box * (1 - gripper_ratio)
-    gripper_open = (1 - gripper_box) * gripper_ratio
+    # gripper_ratio = jp.clip(gripper_opening / max_gripper_opening, 0.0, 1.0)
+    # gripper_close = gripper_box * (1 - gripper_ratio)
+    # gripper_open = (1 - gripper_box) * gripper_ratio
+    gripper_close = (data.ctrl[-1] < 0.02).astype(float) * info["reached_box"]
     # jax.debug.print(
         # "gripper_open={g}, gripper_close={m}",
         # g=gripper_open,
         # m=gripper_close,
     # )
+    lift_threshold = info["init_box_pos"][2] + 0.015
+    is_lifted = (box_pos[2] > lift_threshold).astype(float)
+    z_dist = jp.abs(box_pos[2] - target_pos[2])
+    lifted = is_lifted * (1.0 - jp.tanh(5.0 * z_dist)).astype(float)
+
     rewards = {
         "gripper_box": gripper_box,
-        "box_target": box_target * info["reached_box"],
+        "box_target": box_target,
         "no_floor_collision": no_floor_collision,
-        "gripper_open": gripper_open,
-        # "gripper_close": gripper_close,
-        "gripper_close": gripper_close * info["reached_box"],
+        "gripper_close": gripper_close,
         "no_box_collision": no_box_collision,
         # "robot_target_qpos": robot_target_qpos,
+        "success": self._get_success(data, info).astype(float),
+        "lifted": lifted,
     }
     return rewards
 

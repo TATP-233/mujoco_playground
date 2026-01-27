@@ -7,6 +7,7 @@
     <!-- <camera name="front_right" pos="0.660 0.409 0.259" xyaxes="-0.727 0.687 0.000 -0.188 -0.199 0.962"/> -->
     <body name="box" pos="0.3 0 0.03">
       <freejoint/>
+      <site name="box_site" size="0.01" type="sphere" rgba="0 1 0 0.3"/>
       <geom type="box" name="box" size="0.015 0.015 0.03" condim="3"
        friction="1 .03 .003" rgba="0 1 0 1" contype="2" conaffinity="1" solref="0.01 1" group="1"/>
     </body>
