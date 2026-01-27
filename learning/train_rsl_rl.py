@@ -186,6 +186,7 @@ def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int
   env_cfg.vision_config.render_batch_size = num_envs
   env_cfg.vision_config.render_width = 64
   env_cfg.vision_config.render_height = 64
+  env_cfg.vision_config.dynamic_bg = _USE_BG.value
   
   from mujoco_playground._src import mjx_env
   from ml_collections import ConfigDict
@@ -211,13 +212,18 @@ def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int
   assets_path = mjx_env.ROOT_PATH / "manipulation" / assets_name / "3dgs"
   print(f"3DGS assets path: {assets_path.as_posix()}")
 
+  # Always keep a background 3DGS available so we can re-render bg per-reset
+  # after camera domain randomization.
+  env_cfg.vision_config.background = (assets_path / background_name).as_posix()
+
   if _USE_BG.value:
     if not os.path.exists(background_image_dir):
       raise ValueError(f"Background image directory '{background_image_dir}' does not exist.")
+    # If you still want to use pre-rendered bg images, set dynamic_bg=False.
+    # With dynamic_bg=True, BatchSplatWrapper will ignore this and regenerate bg.
     bg_img = background_image_dir
   else:
     bg_img = (1, 1, 1)
-    env_cfg.vision_config.background = (assets_path / background_name).as_posix()
   env_cfg.vision_config.bg_img = bg_img
   if _SAVE_BG.value:
     body_gaussians = {}
@@ -250,8 +256,8 @@ def main(argv):
     device_rank = int(device.split(":")[-1]) if "cuda" in device else 0
 
   # If play-only, use fewer envs
-  if _PLAY_ONLY.value:    
-      num_envs = min(64, _NUM_ENVS.value) if _VISION.value else 1
+  if _PLAY_ONLY.value:
+      num_envs = min(32, _NUM_ENVS.value) if _VISION.value else 1
   else:
     num_envs = _NUM_ENVS.value
 
