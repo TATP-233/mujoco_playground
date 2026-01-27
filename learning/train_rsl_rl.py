@@ -132,6 +132,7 @@ def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int
   env_cfg.vision_config.render_batch_size = num_envs
   env_cfg.vision_config.render_width = 64
   env_cfg.vision_config.render_height = 64
+  env_cfg.vision_config.dynamic_bg = _USE_BG.value
   
   from mujoco_playground._src import mjx_env
   from ml_collections import ConfigDict
@@ -182,8 +183,8 @@ def main(argv):
     device_rank = int(device.split(":")[-1]) if "cuda" in device else 0
 
   # If play-only, use fewer envs
-  if _PLAY_ONLY.value:    
-      num_envs = min(64, _NUM_ENVS.value) if _VISION.value else 1
+  if _PLAY_ONLY.value:
+      num_envs = min(32, _NUM_ENVS.value) if _VISION.value else 1
   else:
     num_envs = _NUM_ENVS.value
 

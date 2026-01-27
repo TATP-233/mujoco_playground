@@ -15,10 +15,14 @@ import numpy as np
 
 def default_vision_config() -> config_dict.ConfigDict:
   return config_dict.create(
-      render_batch_size=1024,
-      render_width=64,
-      render_height=64,
-      bg_img=(1, 1, 1),
+    render_batch_size=1024,
+    render_width=64,
+    render_height=64,
+    # When True, BatchSplatWrapper re-renders background each reset using
+    # `vision_config.background` and the randomized camera pose.
+    dynamic_bg=True,
+    # bg_img can still be provided for static backgrounds when dynamic_bg=False.
+    # bg_img=(1, 1, 1),
   )
 
 
