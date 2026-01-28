@@ -235,7 +235,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     no_box_collision = jp.where(hand_box, 0.0, 1.0)
 
 
-    box_target = 1 - jp.tanh(10 * (0.9 * pos_err + 0.1 * rot_err))
+    box_target = 1 - jp.tanh(10 * pos_err)
     gripper_box = 1 - jp.tanh(15 * jp.linalg.norm(box_pos - gripper_pos))
     # robot_target_qpos = 1 - jp.tanh(
     #     jp.linalg.norm(
@@ -267,8 +267,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     # )
     gripper_span = self._uppers[-1] - self._lowers[-1]
     gripper_ctrl = data.ctrl[-1]
-    gripper_close = gripper_box * (1 - jp.abs(gripper_ctrl - self._lowers[-1]) / gripper_span)
-    gripper_open = (1 - gripper_box) * (1 - (jp.abs(self._uppers[-1] - gripper_ctrl) / gripper_span))
+    gripper_close = (1 - jp.abs(gripper_ctrl - self._lowers[-1]) / gripper_span)
+    # gripper_open = (1 - gripper_box) * (1 - (jp.abs(self._uppers[-1] - gripper_ctrl) / gripper_span))
     # jax.debug.print(
         # "gripper_open={g}, gripper_close={m}",
         # g=gripper_open,
@@ -278,13 +278,13 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         "gripper_box": gripper_box,
         "box_target": box_target * info["reached_box"],
         "no_floor_collision": no_floor_collision,
-        "gripper_open": gripper_open,
+        # "gripper_open": gripper_open,
         # "gripper_close": gripper_close,
         "gripper_close": gripper_close * info["reached_box"],
         "no_box_collision": no_box_collision,
         # "robot_target_qpos": robot_target_qpos,
         "success": info["success"].astype(float),
-        "lifted": (box_pos[2] > (info["init_box_pos"][2] + 0.005)) * info["reached_box"],
+        "lifted": (box_pos[2] > (info["init_box_pos"][2] + 0.01)) * info["reached_box"],
     }
     return rewards
 

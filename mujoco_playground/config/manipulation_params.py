@@ -71,7 +71,7 @@ def brax_ppo_config(
     rl_config.num_minibatches = 32
     rl_config.num_updates_per_batch = 8
     rl_config.discounting = 0.97
-    rl_config.learning_rate = 1e-3
+    rl_config.learning_rate = 2e-4
     rl_config.entropy_cost = 2e-2
     rl_config.num_envs = 2048
     rl_config.batch_size = 512
@@ -276,7 +276,7 @@ def rsl_rl_config(env_name: str, unused_impl: Optional[str] = None) -> config_di
           num_learning_epochs=4,
           # mini batch size = num_envs*nsteps / nminibatches
           num_mini_batches=8,
-          learning_rate=1e-3,
+          learning_rate=2e-4,
           schedule="adaptive",  # could be adaptive, fixed
           gamma=0.97,
           lam=0.95,
