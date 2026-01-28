@@ -28,7 +28,11 @@ import jax
 import mediapy as media
 from ml_collections import config_dict
 import mujoco
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
+
 import mujoco_playground
+
+print("MuJoCo Playground path:", mujoco_playground.__path__)
 from mujoco_playground import registry
 from mujoco_playground import wrapper_torch
 from mujoco_playground.config import locomotion_params

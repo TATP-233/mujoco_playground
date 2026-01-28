@@ -256,7 +256,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     #     info["reached_box"],
     #     (jp.linalg.norm(box_pos - gripper_pos) < 0.005),
     # )
-    info["reached_box"] = 1.0 * (jp.linalg.norm(box_pos - gripper_pos) < 0.01)
+    info["reached_box"] = 1.0 * (jp.linalg.norm(box_pos - gripper_pos) < 0.015)
     info["success"] = self._get_success(data, info)
     # jax.debug.print("reached_box={r}", r=info["reached_box"])
 
