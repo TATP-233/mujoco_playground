@@ -284,7 +284,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         "no_box_collision": no_box_collision,
         # "robot_target_qpos": robot_target_qpos,
         "success": info["success"].astype(float),
-        "lifted": (box_pos[2] > (info["init_box_pos"][2] + 0.01)) * info["reached_box"],
+        "lifted": (box_pos[2] > (info["init_box_pos"][2] + 0.02)) * info["reached_box"],
     }
     return rewards
 
