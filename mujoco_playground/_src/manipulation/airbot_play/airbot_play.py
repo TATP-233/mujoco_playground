@@ -79,6 +79,7 @@ class AirbotPlayBase(mjx_env.MjxEnv):
     )
     self._init_ctrl = self._mj_model.keyframe(keyframe).ctrl
     self._lowers, self._uppers = self._mj_model.actuator_ctrlrange.T
+    assert len(self._lowers) == self.action_size
 
   @property
   def xml_path(self) -> str:

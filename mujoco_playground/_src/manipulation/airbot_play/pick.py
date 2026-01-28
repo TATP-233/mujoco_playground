@@ -272,17 +272,15 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     info["reached_box"] = 1.0 * (jp.linalg.norm(box_pos - gripper_pos) < 0.01)
     # jax.debug.print("reached_box={r}", r=info["reached_box"])
 
-    # Encourage closing the gripper only after it has reached the box.
-    gripper_opening = jp.mean(data.qpos[self._robot_qposadr[-2:]])
-    max_gripper_opening = jp.asarray(self._uppers[-1])
     # jax.debug.print(
     #     "gripper_opening={g}, max_gripper_opening={m}",
     #     g=gripper_opening,
     #     m=max_gripper_opening,
     # )
-    gripper_ratio = jp.clip(gripper_opening / max_gripper_opening, 0.0, 1.0)
-    gripper_close = gripper_box * (1 - gripper_ratio)
-    gripper_open = (1 - gripper_box) * gripper_ratio
+    gripper_span = self._uppers[-1] - self._lowers[-1]
+    gripper_ctrl = data.ctrl[-1]
+    gripper_close = gripper_box * jp.abs(gripper_ctrl - self._lowers[-1]) / gripper_span
+    gripper_open = (1 - gripper_box) * jp.abs(self._uppers[-1] - gripper_ctrl) / gripper_span
     # jax.debug.print(
         # "gripper_open={g}, gripper_close={m}",
         # g=gripper_open,
