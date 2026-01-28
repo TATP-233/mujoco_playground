@@ -196,7 +196,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     out_of_bounds = jp.any(jp.abs(box_pos) > 1.0)
     out_of_bounds |= box_pos[2] < (state.info["init_box_pos"][2] - 0.01)
     has_non = jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
-    done = out_of_bounds | has_non | state.info["success"]
+    done = out_of_bounds | has_non
     done = done.astype(float)
     state.metrics.update({"has_non": has_non})
     state.metrics.update({"reached_box": state.info["reached_box"]})
