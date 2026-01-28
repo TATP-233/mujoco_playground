@@ -45,11 +45,11 @@ def default_config() -> config_dict.ConfigDict:
               gripper_open=0.5,
               # Close the gripper after reaching the box.
               gripper_close=20.0,
+              lifted=8.0,
+              success=10.0,
             #   # Orientation alignment reward.
             #   reward_ori=0.5,
           ),
-          lifted_reward=8.0,
-          success_reward=10.0  #2.0,
       ),
       vision=False,
       vision_config=default_vision_config(),
@@ -159,13 +159,11 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     }
     if self._vision:
        metrics.update({
-           'reward/lifted': jp.array(0.0, dtype=float),
-           'reward/success': jp.array(0.0, dtype=float),
            "has_non": False,
            "reached_box": 0.0,
        })
 
-    info = {"rng": rng, "target_pos": target_pos, "reached_box": 0.0, "init_box_pos": self._get_box_pos(data)}
+    info = {"rng": rng, "target_pos": target_pos, "reached_box": 0.0, "init_box_pos": self._get_box_pos(data), "success": False}
     if self._vision:
         obs = self._get_obs_vision(data, info)
     else:
@@ -195,21 +193,10 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
     reward = jp.clip(sum(rewards.values()), -1e4, 1e4)
     box_pos = self._get_box_pos(data)
-    if self._vision:
-        # Sparse rewards
-        lifted = (box_pos[2] > (state.info["init_box_pos"][2] + 0.005)) * self._config.reward_config.lifted_reward * state.info["reached_box"]
-        reward += lifted
-        success = self._get_success(data, state.info)
-        reward += success * self._config.reward_config.success_reward
-        state.metrics.update({
-            'reward/lifted': lifted.astype(float),
-            'reward/success': success.astype(float),
-        })
-
     out_of_bounds = jp.any(jp.abs(box_pos) > 1.0)
     out_of_bounds |= box_pos[2] < (state.info["init_box_pos"][2] - 0.01)
     has_non = jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
-    done = out_of_bounds | has_non | success
+    done = out_of_bounds | has_non | state.info["success"]
     done = done.astype(float)
     state.metrics.update({"has_non": has_non})
     state.metrics.update({"reached_box": state.info["reached_box"]})
@@ -270,6 +257,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     #     (jp.linalg.norm(box_pos - gripper_pos) < 0.005),
     # )
     info["reached_box"] = 1.0 * (jp.linalg.norm(box_pos - gripper_pos) < 0.01)
+    info["success"] = self._get_success(data, info)
     # jax.debug.print("reached_box={r}", r=info["reached_box"])
 
     # jax.debug.print(
@@ -295,6 +283,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         "gripper_close": gripper_close * info["reached_box"],
         "no_box_collision": no_box_collision,
         # "robot_target_qpos": robot_target_qpos,
+        "success": info["success"].astype(float),
+        "lifted": (box_pos[2] > (info["init_box_pos"][2] + 0.005)) * info["reached_box"],
     }
     return rewards
 
