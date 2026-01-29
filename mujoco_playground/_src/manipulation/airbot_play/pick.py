@@ -95,6 +95,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
   def reset(self, rng: jax.Array) -> State:
     rng, rng_box, rng_target = jax.random.split(rng, 3)
 
+    self._max_box_range = (0.05 + 0.02, 0.1 + 0.02)
     # intialize box position
     box_pos = (
         jax.random.uniform(
@@ -178,7 +179,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
   def step(self, state: State, action: jax.Array) -> State:
     delta = action * self._action_scale
     # normalize the gripper action with other joints
-    delta = delta.at[-1].set(delta[-1] * 0.01)
+    # delta = delta.at[-1].set(delta[-1] * 0.01)
 
     ctrl = state.data.ctrl + delta
     ctrl = jp.clip(ctrl, self._lowers, self._uppers)
@@ -206,8 +207,11 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
             'reward/success': success.astype(float),
         })
 
+    init_box_pos = state.info["init_box_pos"]
     out_of_bounds = jp.any(jp.abs(box_pos) > 1.0)
-    out_of_bounds |= box_pos[2] < (state.info["init_box_pos"][2] - 0.01)
+    out_of_bounds |= jp.abs((init_box_pos[0] - box_pos[0])) > self._max_box_range[0]
+    out_of_bounds |= jp.abs((init_box_pos[1] - box_pos[1])) > self._max_box_range[1]
+    out_of_bounds |= box_pos[2] < (init_box_pos[2] - 0.01)
     has_non = jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
     done = out_of_bounds | has_non | success
     done = done.astype(float)
