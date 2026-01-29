@@ -35,7 +35,7 @@ def default_config() -> config_dict.ConfigDict:
               # Gripper goes to the box.
               gripper_box=5.0,
               # Box goes to the target mocap.
-              box_target=5.0, #8.0,
+              box_target=8.0, #8.0,
               # Do not collide the gripper with the floor.
               no_floor_collision=0.25,
               # Do not collide the gripper with the box.
@@ -253,7 +253,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
 
     box_target = 1 - jp.tanh(5 * pos_err)
-    gripper_box = 1 - jp.tanh(5 * jp.linalg.norm(box_pos - gripper_pos))
+    gripper_box = 1 - jp.tanh(10 * jp.linalg.norm(box_pos - gripper_pos))
     # robot_target_qpos = 1 - jp.tanh(
     #     jp.linalg.norm(
     #         data.qpos[self._robot_arm_qposadr]
