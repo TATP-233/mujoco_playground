@@ -236,7 +236,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
 
     box_target = 1 - jp.tanh(10 * pos_err)
-    gripper_box = 1 - jp.tanh(15 * jp.linalg.norm(box_pos - gripper_pos))
+    gripper_box = 1 - jp.tanh(1 * jp.linalg.norm(box_pos - gripper_pos))
     # robot_target_qpos = 1 - jp.tanh(
     #     jp.linalg.norm(
     #         data.qpos[self._robot_arm_qposadr]
