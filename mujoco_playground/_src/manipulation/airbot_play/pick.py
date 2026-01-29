@@ -35,7 +35,7 @@ def default_config() -> config_dict.ConfigDict:
               # Gripper goes to the box.
               gripper_box=5.0,
               # Box goes to the target mocap.
-              box_target=5.0, #8.0,
+              box_target=8.0,
               # Do not collide the gripper with the floor.
               no_floor_collision=0.25,
               # Do not collide the gripper with the box.
@@ -85,7 +85,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     self._vision = config.vision
     self._post_init(obj_name="box", keyframe="init")
     self._sample_orientation = sample_orientation
-
+    self._max_box_range = (0.05 + 0.01, 0.05 + 0.01)
     # Contact sensor IDs.
     self._floor_hand_found_sensor = [
         self._mj_model.sensor(f"{geom}_floor_found").id
@@ -193,8 +193,11 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
     reward = jp.clip(sum(rewards.values()), -1e4, 1e4)
     box_pos = self._get_box_pos(data)
+    init_box_pos = state.info["init_box_pos"]
     out_of_bounds = jp.any(jp.abs(box_pos) > 1.0)
-    out_of_bounds |= box_pos[2] < (state.info["init_box_pos"][2] - 0.01)
+    out_of_bounds |= jp.abs((init_box_pos[0] - box_pos[0])) > self._max_box_range[0]
+    out_of_bounds |= jp.abs((init_box_pos[1] - box_pos[1])) > self._max_box_range[1]
+    out_of_bounds |= box_pos[2] < (init_box_pos[2] - 0.01)
     has_non = jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
     done = out_of_bounds | has_non
     done = done.astype(float)
