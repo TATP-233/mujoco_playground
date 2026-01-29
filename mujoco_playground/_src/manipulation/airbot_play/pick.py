@@ -177,8 +177,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
   def step(self, state: State, action: jax.Array) -> State:
     delta = action * self._action_scale
-    # if self._vision:
-    #     delta = delta.at[-1].set(jp.where(delta[-1] < 0, -1.0, 1.0) * 0.02) # up to 2 cm movement per ctrl.
+    # normalize the gripper action with other joints
+    delta = delta.at[-1].set(delta[-1] * 0.01)
 
     ctrl = state.data.ctrl + delta
     ctrl = jp.clip(ctrl, self._lowers, self._uppers)
