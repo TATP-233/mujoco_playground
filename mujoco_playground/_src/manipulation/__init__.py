@@ -32,7 +32,7 @@ from mujoco_playground._src.manipulation.aero_hand import rotate_z as aero_hand_
 from mujoco_playground._src.manipulation.airbot_play import pick as airbot_pick
 from mujoco_playground._src.manipulation.airbot_play import pick_cartesian as airbot_pick_cartesian
 from mujoco_playground._src.manipulation.universal_robots_ur5e_robotiq import pick as ur5e_pick
-from mujoco_playground._src.manipulation.franka_emika_panda import randomize_3dgs
+from mujoco_playground._src.manipulation.airbot_play import randomize_3dgs
 
 _envs = {
     "AlohaHandOver": aloha_handover.HandOver,

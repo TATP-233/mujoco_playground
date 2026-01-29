@@ -35,7 +35,7 @@ def default_config() -> config_dict.ConfigDict:
               # Gripper goes to the box.
               gripper_box=5.0,
               # Box goes to the target mocap.
-              box_target=8.0, #8.0,
+              box_target=5.0, #8.0,
               # Do not collide the gripper with the floor.
               no_floor_collision=0.25,
               # Do not collide the gripper with the box.
@@ -209,8 +209,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
     init_box_pos = state.info["init_box_pos"]
     out_of_bounds = jp.any(jp.abs(box_pos) > 1.0)
-    out_of_bounds |= jp.abs((init_box_pos[0] - box_pos[0])) > self._max_box_range[0]
-    out_of_bounds |= jp.abs((init_box_pos[1] - box_pos[1])) > self._max_box_range[1]
+    # out_of_bounds |= jp.abs((init_box_pos[0] - box_pos[0])) > self._max_box_range[0]
+    # out_of_bounds |= jp.abs((init_box_pos[1] - box_pos[1])) > self._max_box_range[1]
     out_of_bounds |= box_pos[2] < (init_box_pos[2] - 0.01)
     has_non = jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
     done = out_of_bounds | has_non | success
@@ -252,7 +252,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     no_box_collision = jp.where(hand_box, 0.0, 1.0)
 
 
-    box_target = 1 - jp.tanh(5 * pos_err)
+    box_target = 1 - jp.tanh(8 * pos_err)
     gripper_box = 1 - jp.tanh(10 * jp.linalg.norm(box_pos - gripper_pos))
     # robot_target_qpos = 1 - jp.tanh(
     #     jp.linalg.norm(
