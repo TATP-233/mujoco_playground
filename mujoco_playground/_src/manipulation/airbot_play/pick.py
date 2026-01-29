@@ -177,8 +177,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
   def step(self, state: State, action: jax.Array) -> State:
     delta = action * self._action_scale
-    if self._vision:
-        delta = delta.at[-1].set(jp.where(delta[-1] < 0, -1.0, 1.0) * 0.02) # up to 2 cm movement per ctrl.
+    # if self._vision:
+    #     delta = delta.at[-1].set(jp.where(delta[-1] < 0, -1.0, 1.0) * 0.02) # up to 2 cm movement per ctrl.
 
     ctrl = state.data.ctrl + delta
     ctrl = jp.clip(ctrl, self._lowers, self._uppers)
@@ -248,7 +248,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     no_box_collision = jp.where(hand_box, 0.0, 1.0)
 
 
-    box_target = 1 - jp.tanh(5 * (0.9 * pos_err + 0.1 * rot_err))
+    box_target = 1 - jp.tanh(5 * pos_err)
     gripper_box = 1 - jp.tanh(5 * jp.linalg.norm(box_pos - gripper_pos))
     # robot_target_qpos = 1 - jp.tanh(
     #     jp.linalg.norm(
