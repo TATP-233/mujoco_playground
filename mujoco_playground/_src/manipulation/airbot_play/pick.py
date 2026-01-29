@@ -198,7 +198,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     box_pos = self._get_box_pos(data)
     if self._vision:
         # Sparse rewards
-        lifted = (box_pos[2] > (state.info["init_box_pos"][2] + 0.005)) * self._config.reward_config.lifted_reward * state.info["reached_box"]
+        lifted = (box_pos[2] > (state.info["init_box_pos"][2] + 0.02)) * self._config.reward_config.lifted_reward * state.info["reached_box"]
         reward += lifted
         success = self._get_success(data, state.info)
         reward += success * self._config.reward_config.success_reward
