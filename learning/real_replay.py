@@ -1,24 +1,31 @@
-from real_robot_inference_mock import RealRobotInterfaceMock, EnvSpec
 import numpy as np
 import cv2
+import time
 from pathlib import Path
+from real_robot_inference_mock import RealRobotInterfaceMock, EnvSpec
 
 
 spec = EnvSpec(obs_size=21, privileged_obs_size=None, action_size=7, num_cameras=2)
 
 robot = RealRobotInterfaceMock(spec, True)
 
-kind = "states"
-# kind = "actions"
+# kind = "states"
+kind = "actions"
 replay_data: np.ndarray = np.load(
     f"videos/AirbotPlayPickCube-20260130-115226/AirbotPlayPickCube-model_2550-{kind}.npy"
 )
 print(f"Loaded action data with shape: {replay_data.shape}")
 video_dir = Path("replayed_videos")
 video_dir.mkdir(exist_ok=True)
-for rollout in range(0, replay_data.shape[1]):
+rollout = 0
+for _ in range(0, 100):
     robot.reset(np.array([0, -1.1466, 1.1161, 1.5815, -1.4836, 0.0, 0.04]))
-    input(f"Robot reset complete for rollout {rollout}. Press Enter to start...")
+    if (
+        in_value := input(
+            f"Robot reset complete for rollout {rollout}. Press Enter to start..."
+        )
+    ).isdigit():
+        rollout = int(in_value)
     rollout_dir = video_dir / f"rollout_{rollout}"
     rollout_dir.mkdir(exist_ok=True)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # 或 'MJPG', 'MP4V' 等
@@ -35,12 +42,17 @@ for rollout in range(0, replay_data.shape[1]):
                 out[i].write(value)
                 i += 1
         if kind == "states":
-            for _ in range(3):
-                robot.send_abs_action(action)
+            # for _ in range(3):
+            robot.send_abs_action(action)
         else:
             robot.send_action(action)
         if input(f"Step {step} complete. Press Enter to continue...") == "q":
             break
+        time.sleep(1 / 20)
+        if step >= 45:
+            break
     print(f"Rollout {rollout} complete. Videos saved.")
     for i in range(spec.num_cameras):
         out[i].release()
+    rollout += 1
+robot._grouped.shutdown()
