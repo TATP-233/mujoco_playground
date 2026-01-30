@@ -334,14 +334,14 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
   def _get_obs_vision(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
     gripper_pos = data.site_xpos[self._gripper_site]
     gripper_mat = data.site_xmat[self._gripper_site].ravel()
-    target_mat = math.quat_to_mat(data.mocap_quat[self._mocap_target])
+    # target_mat = math.quat_to_mat(data.mocap_quat[self._mocap_target])
     obs = jp.concatenate([
         data.qpos[self._robot_qposadr],
-        data.qvel[self._robot_qposadr],
+        # data.qvel[self._robot_qposadr],
         gripper_pos,
-        gripper_mat[3:],
+        # gripper_mat[3:],
         info["target_pos"],
-        target_mat.ravel()[:6],
+        # target_mat.ravel()[:6],
         data.ctrl - data.qpos[self._robot_qposadr[:-1]],
     ])
 
