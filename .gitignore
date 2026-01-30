@@ -14,3 +14,4 @@ mujoco_playground/experimental/madrona_benchmarking/get_data.sh
 # background_images/
 command.json
 .vscode/
+*.npy

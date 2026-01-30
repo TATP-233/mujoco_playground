@@ -385,10 +385,12 @@ def main(argv):
     obs_torch = get_obs_dict(state)
     pixel_frames = []
 
+  all_actions = []
   for _ in range(env_cfg.episode_length):
     with torch.no_grad():
       actions = policy(obs_torch)
       actions = torch.clip(actions, -1.0, 1.0)
+    all_actions.append(actions.cpu().numpy())
     # Step environment
     if _VISION.value:
       obs_torch, reward, done, info = eval_env.step(actions)
@@ -442,7 +444,7 @@ def main(argv):
   video_name = f"{video_dir}/{_ENV_NAME.value}-{model_name}-rollout.mp4"
   media.write_video(video_name, frames, fps=fps)
   print(f"Rollout video saved to '{video_name}'.")
-
+  np.save(f"{video_dir}/{_ENV_NAME.value}-{model_name}-actions.npy", np.array(all_actions))
 
 if __name__ == "__main__":
   app.run(main)
