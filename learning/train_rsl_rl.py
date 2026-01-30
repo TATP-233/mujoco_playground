@@ -132,7 +132,7 @@ def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int
   env_cfg.vision_config.render_batch_size = num_envs
   env_cfg.vision_config.render_width = 64
   env_cfg.vision_config.render_height = 64
-  env_cfg.vision_config.dynamic_bg = _USE_BG.value
+  env_cfg.vision_config.dynamic_bg = True
   
   from mujoco_playground._src import mjx_env
   from ml_collections import ConfigDict
@@ -151,7 +151,8 @@ def configure_3dgs(env_cfg: config_dict.ConfigDict, env_name: str, num_envs: int
   elif "AirbotPlay" in env_name:
     assets_name = "airbot_play"
     bodies = ["arm_base", "link1", "link2", "link3", "link4", "link5", "link6", "left", "right"]
-    background_name = "ribbon_blue.ply"
+    # background_name = "ribbon_blue.ply"
+    background_name = "background.ply"
     gaussians_name["box"] = "green_cube.ply"
 
   assets_path = mjx_env.ROOT_PATH / "manipulation" / assets_name / "3dgs"
