@@ -322,6 +322,7 @@ class RealRobotInterfaceMock:
                 assert clipped.shape == (480, 480, 3)
                 resized = cv2.resize(clipped, (64, 64))
                 obs[f"pixels/view_{i}"] = resized[:, :, ::-1].copy()  # BGR to RGB
+                obs[image_keys[i]] = image
                 if self._first_get:
                     cv2.imwrite(f"pixels/view_{i}.png", resized)
                 # cv2.imshow(f"Camera view {i}", resized)
@@ -336,10 +337,18 @@ class RealRobotInterfaceMock:
         self._ctrl += action * 0.02
         print(f"action: {(action * 0.02).tolist()}")
         print(f"ctrl: {self._ctrl.tolist()}")
-        input("Press Enter to continue...")
+        # input("Press Enter to continue...")
         self._send_action(self._ctrl, SystemMode.SAMPLING)
         return {"ok": True, "action_norm": float(np.linalg.norm(action))}
 
+    def send_abs_action(self, action: np.ndarray) -> Dict[str, Any]:
+        # Replace with: send joint position / cartesian position / gripper cmd.
+        # Here we return a mock feedback dict.
+        self._ctrl = action
+        print(f"abs action: {action.tolist()}")
+        # input("Press Enter to continue...")
+        self._send_action(self._ctrl, SystemMode.SAMPLING)
+        return {"ok": True, "action_norm": float(np.linalg.norm(action))}
 
 def _obs_to_tensordict(obs: Dict[str, np.ndarray], device: torch.device) -> TensorDict:
     td: Dict[str, torch.Tensor] = {}

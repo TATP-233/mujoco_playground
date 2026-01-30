@@ -386,6 +386,7 @@ def main(argv):
     pixel_frames = []
 
   all_actions = []
+  all_states = []
   for _ in range(env_cfg.episode_length):
     with torch.no_grad():
       actions = policy(obs_torch)
@@ -394,6 +395,11 @@ def main(argv):
     # Step environment
     if _VISION.value:
       obs_torch, reward, done, info = eval_env.step(actions)
+      # `BatchSplatWrapper` returns a TensorDict whose "state" is already a torch
+      # tensor. `env_state.obs` may be a JAX array (non-dict), so string indexing
+      # can fail.
+      state = obs_torch["state"]
+      all_states.append(state.cpu().numpy())
       rollout.append(eval_env.env_state)
       pixel_frames.append(get_pixel_frame(obs_torch))
       if done.any():
@@ -445,6 +451,8 @@ def main(argv):
   media.write_video(video_name, frames, fps=fps)
   print(f"Rollout video saved to '{video_name}'.")
   np.save(f"{video_dir}/{_ENV_NAME.value}-{model_name}-actions.npy", np.array(all_actions))
+  np.save(f"{video_dir}/{_ENV_NAME.value}-{model_name}-states.npy", np.array(all_states))
+  print(f"Rollout actions and states saved to '{video_dir}'.")
 
 if __name__ == "__main__":
   app.run(main)
