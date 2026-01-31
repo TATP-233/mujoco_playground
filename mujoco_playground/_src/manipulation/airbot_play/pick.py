@@ -31,7 +31,7 @@ def default_config() -> config_dict.ConfigDict:
   config = config_dict.create(
       ctrl_dt=0.02,
       sim_dt=0.005,
-      episode_length=150,
+      episode_length=100,
       action_repeat=1,
       action_scale=0.02,
       reward_config=config_dict.create(

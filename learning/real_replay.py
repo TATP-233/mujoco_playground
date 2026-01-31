@@ -9,8 +9,8 @@ spec = EnvSpec(obs_size=21, privileged_obs_size=None, action_size=7, num_cameras
 
 robot = RealRobotInterfaceMock(spec, True)
 
-# kind = "states"
-kind = "actions"
+kind = "states"
+# kind = "actions"
 replay_data: np.ndarray = np.load(
     f"videos/AirbotPlayPickCube-20260130-115226/AirbotPlayPickCube-model_2550-{kind}.npy"
 )

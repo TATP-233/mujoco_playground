@@ -185,7 +185,7 @@ def main(argv):
 
   # If play-only, use fewer envs
   if _PLAY_ONLY.value:
-      num_envs = min(32, _NUM_ENVS.value) if _VISION.value else 1
+      num_envs = min(49, _NUM_ENVS.value) if _VISION.value else 1
   else:
     num_envs = _NUM_ENVS.value
 
@@ -402,8 +402,8 @@ def main(argv):
       all_states.append(state.cpu().numpy())
       rollout.append(eval_env.env_state)
       pixel_frames.append(get_pixel_frame(obs_torch))
-      if done.any():
-        break
+      # if done.any():
+      #   break
     else:
       state = jit_step(state, wrapper_torch._torch_to_jax(actions.flatten()))
       rollout.append(state)
