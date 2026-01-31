@@ -11,6 +11,11 @@ from mujoco_playground._src import mjx_env
 from mujoco_playground._src.manipulation.airbot_play import airbot_play
 from mujoco_playground._src.mjx_env import State  # pylint: disable=g-importing-member
 import numpy as np
+import sys
+from pathlib import Path
+
+# sys.path.insert(0, str(Path(__file__).parents[3]))
+from learning.real_robot_inference_mock import RealRobotInterfaceMock, EnvSpec
 
 
 def default_vision_config() -> config_dict.ConfigDict:
@@ -31,7 +36,7 @@ def default_config() -> config_dict.ConfigDict:
   config = config_dict.create(
       ctrl_dt=0.02,
       sim_dt=0.005,
-      episode_length=100,
+      episode_length=65,
       action_repeat=1,
       action_scale=0.02,
       reward_config=config_dict.create(
@@ -95,21 +100,23 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         self._mj_model.sensor(f"{geom}_floor_found").id
         for geom in ["left_finger_pad", "right_finger_pad", "hand_box"]
     ]
+    self._real = RealRobotInterfaceMock(spec=EnvSpec(obs_size=21, privileged_obs_size=None, action_size=7, num_cameras=2), vision=True)
 
   def reset(self, rng: jax.Array) -> State:
+    self._real.reset(np.array([0, -1.1466, 1.1161, 1.5815, -1.4836, 0.0, 0.04]))
     rng, rng_box, rng_target = jax.random.split(rng, 3)
 
     # intialize box position
-    box_pos = (
-        jax.random.uniform(
-            rng_box,
-            (3,),
-            minval=jp.array([-0.05, -0.1, 0.0]),
-            maxval=jp.array([0.05, 0.1, 0.0]),
-        )
-        + self._init_obj_pos
-    )
-    # box_pos = self._init_obj_pos
+    # box_pos = (
+    #     jax.random.uniform(
+    #         rng_box,
+    #         (3,),
+    #         minval=jp.array([-0.05, -0.1, 0.0]),
+    #         maxval=jp.array([0.05, 0.1, 0.0]),
+    #     )
+    #     + self._init_obj_pos
+    # )
+    box_pos = self._init_obj_pos
     # print(f"init box pos={box_pos}")
     # initialize target position
     target_pos = (
@@ -174,7 +181,6 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         obs = self._get_obs_vision(data, info)
     else:
         obs = self._get_obs(data, info)
-
     reward, done = jp.zeros(2)
     state = State(data, obs, reward, done, metrics, info)
     return state
@@ -183,9 +189,12 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     delta = action * self._action_scale
     # if self._vision:
     #     delta = delta.at[-1].set(jp.where(delta[-1] < 0, -1.0, 1.0) * 0.02) # up to 2 cm movement per ctrl.
-
     ctrl = state.data.ctrl + delta
     ctrl = jp.clip(ctrl, self._lowers, self._uppers)
+    def _send_abs_action_cb(x: np.ndarray) -> None:
+      self._real.send_abs_action(np.asarray(x, dtype=np.float32))
+
+    jax.debug.callback(_send_abs_action_cb, ctrl, ordered=True)
 
     data = mjx_env.step(self._mjx_model, state.data, ctrl, self.n_substeps)
     if self._vision:
@@ -335,14 +344,16 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     gripper_pos = data.site_xpos[self._gripper_site]
     gripper_mat = data.site_xmat[self._gripper_site].ravel()
     # target_mat = math.quat_to_mat(data.mocap_quat[self._mocap_target])
+    # qpos = jp.array(self._real.get_qpos())
+    qpos = data.qpos[self._robot_qposadr]
     obs = jp.concatenate([
-        data.qpos[self._robot_qposadr],
+        qpos,
         # data.qvel[self._robot_qposadr],
         gripper_pos,
         # gripper_mat[3:],
         info["target_pos"],
         # target_mat.ravel()[:6],
-        data.ctrl - data.qpos[self._robot_qposadr[:-1]],
+        data.ctrl - qpos[:-1],
     ])
 
     return obs

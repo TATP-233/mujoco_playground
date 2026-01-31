@@ -271,6 +271,37 @@ def create_rgb_image(num, rgb_color, image_size):
 class BatchSplatWrapper(RSLRLBraxWrapper):
   """Wrapper for Brax environments that interop with torch and use 3DGS BatchSplatRenderer."""
 
+  def _maybe_get_real_pixels_obs(self, device):
+    real = getattr(self.env.unwrapped, "_real", None)
+    if real is None or not hasattr(real, "get_images"):
+      return None
+
+    images_np = real.get_images(height=self.height, width=self.width)
+    if not images_np:
+      return None
+
+    out = {}
+    for i in range(self.env.mj_model.ncam):
+      key = f"pixels/view_{i}"
+      if key not in images_np:
+        raise KeyError(
+          f"Real image source did not provide key '{key}'. "
+          f"Available keys: {sorted(images_np.keys())}"
+        )
+      img = np.ascontiguousarray(images_np[key])
+      t = torch.from_numpy(img)
+      if self.pixels_uint8:
+        if t.dtype != torch.uint8:
+          t = t.to(torch.uint8)
+      else:
+        t = t.to(torch.float32) / 255.0
+      t = t.to(device)
+      if t.ndim != 3:
+        raise ValueError(f"Expected image tensor HxWx3 for {key}, got shape={tuple(t.shape)}")
+      t = t.unsqueeze(0).repeat(self.batch_size, 1, 1, 1)
+      out[key] = t
+    return out
+
   def _ensure_nonempty_body_gaussians(
       self, mj_model, body_gaussians, *, purpose: str, warn: bool = True
   ):
@@ -455,47 +486,6 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
     action = _torch_to_jax(action)
     self.env_state = self.step_fn(self.env_state, action)
     
-    # Render
-    b_pos = _jax_to_torch(self.env_state.data.xpos)
-    b_quat = _jax_to_torch(self.env_state.data.xquat)
-    c_pos = _jax_to_torch(self.env_state.data.cam_xpos)
-    c_xmat = _jax_to_torch(self.env_state.data.cam_xmat)
-
-    # If BraxAutoResetWrapper performed a full reset on done, the returned
-    # state.data for done envs is already the reset state with re-randomized
-    # camera pose. Refresh background for those envs to keep bg/fg consistent.
-    if self.dynamic_bg:
-      done_torch = _jax_to_torch(self.env_state.done).to(torch.bool)
-      if done_torch.any():
-        gsb_bg = self.renderer_bg.batch_update_gaussians(b_pos, b_quat)
-        bg_rgb, _ = self.renderer_bg.batch_env_render(
-            gsb_bg,
-            c_pos,
-            c_xmat,
-            self.height,
-            self.width,
-            self.fovy_np,
-            self._bg_img_base,
-        )
-        mask = done_torch.view(-1, 1, 1, 1, 1).to(bg_rgb.device)
-        # Only overwrite backgrounds for envs that ended this step.
-        self.bg_img = torch.where(mask, bg_rgb, self.bg_img)
-    
-    gsb = self.renderer_fg.batch_update_gaussians(b_pos, b_quat)
-    if self.dynamic_bg:
-      bg_img = self.bg_img
-    else:
-      bg_img = self.bg_img_camera.unsqueeze(0).expand(
-          self.batch_size, -1, -1, -1, -1
-      )
-    rgb, _ = self.renderer_fg.batch_env_render(
-      gsb, c_pos, c_xmat, self.height, self.width, self.fovy_np, bg_img
-    )
-
-    rgb_obs = rgb
-    if self.pixels_uint8:
-      rgb_obs = (rgb_obs.clamp(0.0, 1.0) * 255.0).to(torch.uint8)
-    
     # Construct observations
     critic_obs = None
     if self.asymmetric_obs:
@@ -505,18 +495,56 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
     else:
       obs = _jax_to_torch(self.env_state.obs)
       obs = {"state": obs}
+
+    # Prefer real camera images if the underlying env provides them.
+    device = obs["state"].device
+    real_pixels = self._maybe_get_real_pixels_obs(device)
+    if real_pixels is None:
+      # Render
+      b_pos = _jax_to_torch(self.env_state.data.xpos)
+      b_quat = _jax_to_torch(self.env_state.data.xquat)
+      c_pos = _jax_to_torch(self.env_state.data.cam_xpos)
+      c_xmat = _jax_to_torch(self.env_state.data.cam_xmat)
+
+      # If BraxAutoResetWrapper performed a full reset on done, the returned
+      # state.data for done envs is already the reset state with re-randomized
+      # camera pose. Refresh background for those envs to keep bg/fg consistent.
+      if self.dynamic_bg:
+        done_torch = _jax_to_torch(self.env_state.done).to(torch.bool)
+        if done_torch.any():
+          gsb_bg = self.renderer_bg.batch_update_gaussians(b_pos, b_quat)
+          bg_rgb, _ = self.renderer_bg.batch_env_render(
+              gsb_bg,
+              c_pos,
+              c_xmat,
+              self.height,
+              self.width,
+              self.fovy_np,
+              self._bg_img_base,
+          )
+          mask = done_torch.view(-1, 1, 1, 1, 1).to(bg_rgb.device)
+          # Only overwrite backgrounds for envs that ended this step.
+          self.bg_img = torch.where(mask, bg_rgb, self.bg_img)
+
+      gsb = self.renderer_fg.batch_update_gaussians(b_pos, b_quat)
+      if self.dynamic_bg:
+        bg_img = self.bg_img
+      else:
+        bg_img = self.bg_img_camera.unsqueeze(0).expand(
+            self.batch_size, -1, -1, -1, -1
+        )
+      rgb, _ = self.renderer_fg.batch_env_render(
+        gsb, c_pos, c_xmat, self.height, self.width, self.fovy_np, bg_img
+      )
+
+      rgb_obs = rgb
+      if self.pixels_uint8:
+        rgb_obs = (rgb_obs.clamp(0.0, 1.0) * 255.0).to(torch.uint8)
       
-    # Add pixels to observation
-    # Assuming obs is a dict, if not, we need to decide how to structure it.
-    # RSL-RL usually expects a dict for complex obs.
-    if isinstance(obs, dict):
       for i in range(self.env.mj_model.ncam):
         obs[f'pixels/view_{i}'] = rgb_obs[:, i]
     else:
-      # If obs was a tensor, convert to dict to add pixels
-      obs = {"state": obs}
-      for i in range(self.env.mj_model.ncam):
-        obs[f'pixels/view_{i}'] = rgb_obs[:, i]
+      obs.update(real_pixels)
 
     reward = _jax_to_torch(self.env_state.reward)
     done = _jax_to_torch(self.env_state.done)
@@ -550,40 +578,6 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
 
   def reset(self):
     self.env_state = self.reset_fn(self.key_reset)
-    
-    # Render initial state
-    b_pos = _jax_to_torch(self.env_state.data.xpos)
-    b_quat = _jax_to_torch(self.env_state.data.xquat)
-    c_pos = _jax_to_torch(self.env_state.data.cam_xpos)
-    c_xmat = _jax_to_torch(self.env_state.data.cam_xmat)
-    
-    if self.dynamic_bg:
-      gsb_bg = self.renderer_bg.batch_update_gaussians(b_pos, b_quat)
-      bg_rgb, _ = self.renderer_bg.batch_env_render(
-        gsb_bg,
-        c_pos,
-        c_xmat,
-        self.height,
-        self.width,
-        self.fovy_np,
-        self._bg_img_base,
-      )
-      self.bg_img = bg_rgb
-
-    gsb = self.renderer_fg.batch_update_gaussians(b_pos, b_quat)
-    if self.dynamic_bg:
-      bg_img = self.bg_img
-    else:
-      bg_img = self.bg_img_camera.unsqueeze(0).expand(
-          self.batch_size, -1, -1, -1, -1
-      )
-    rgb, _ = self.renderer_fg.batch_env_render(
-      gsb, c_pos, c_xmat, self.height, self.width, self.fovy_np, bg_img
-    )
-
-    rgb_obs = rgb
-    if self.pixels_uint8:
-      rgb_obs = (rgb_obs.clamp(0.0, 1.0) * 255.0).to(torch.uint8)
 
     if self.asymmetric_obs:
       obs = _jax_to_torch(self.env_state.obs["state"])
@@ -592,14 +586,47 @@ class BatchSplatWrapper(RSLRLBraxWrapper):
     else:
       obs = _jax_to_torch(self.env_state.obs)
       obs = {"state": obs}
-      
-    # Add pixels to observation
-    if isinstance(obs, dict):
+
+    device = obs["state"].device
+    real_pixels = self._maybe_get_real_pixels_obs(device)
+    if real_pixels is None:
+      # Render initial state
+      b_pos = _jax_to_torch(self.env_state.data.xpos)
+      b_quat = _jax_to_torch(self.env_state.data.xquat)
+      c_pos = _jax_to_torch(self.env_state.data.cam_xpos)
+      c_xmat = _jax_to_torch(self.env_state.data.cam_xmat)
+
+      if self.dynamic_bg:
+        gsb_bg = self.renderer_bg.batch_update_gaussians(b_pos, b_quat)
+        bg_rgb, _ = self.renderer_bg.batch_env_render(
+          gsb_bg,
+          c_pos,
+          c_xmat,
+          self.height,
+          self.width,
+          self.fovy_np,
+          self._bg_img_base,
+        )
+        self.bg_img = bg_rgb
+
+      gsb = self.renderer_fg.batch_update_gaussians(b_pos, b_quat)
+      if self.dynamic_bg:
+        bg_img = self.bg_img
+      else:
+        bg_img = self.bg_img_camera.unsqueeze(0).expand(
+            self.batch_size, -1, -1, -1, -1
+        )
+      rgb, _ = self.renderer_fg.batch_env_render(
+        gsb, c_pos, c_xmat, self.height, self.width, self.fovy_np, bg_img
+      )
+
+      rgb_obs = rgb
+      if self.pixels_uint8:
+        rgb_obs = (rgb_obs.clamp(0.0, 1.0) * 255.0).to(torch.uint8)
+
       for i in range(self.env.mj_model.ncam):
         obs[f'pixels/view_{i}'] = rgb_obs[:, i]
     else:
-      obs = {"state": obs}
-      for i in range(self.env.mj_model.ncam):
-        obs[f'pixels/view_{i}'] = rgb_obs[:, i]
+      obs.update(real_pixels)
             
     return TensorDict(obs, batch_size=[self.num_envs])

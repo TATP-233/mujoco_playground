@@ -39,11 +39,6 @@ def _add_repo_to_path() -> None:
 _add_repo_to_path()
 
 
-from mujoco_playground import registry  # pylint: disable=wrong-import-position
-from mujoco_playground.config import locomotion_params  # pylint: disable=wrong-import-position
-from mujoco_playground.config import manipulation_params  # pylint: disable=wrong-import-position
-from mujoco_playground._src import wrapper_torch  # pylint: disable=wrong-import-position
-
 from rsl_rl.env import VecEnv  # pylint: disable=wrong-import-position
 from rsl_rl.runners import OnPolicyRunner  # pylint: disable=wrong-import-position
 from rsl_rl.modules import ActorCritic  # pylint: disable=wrong-import-position
@@ -207,7 +202,24 @@ class RealRobotInterfaceMock:
     Replace these methods with your real robot SDK.
     """
 
+    _instance: Optional["RealRobotInterfaceMock"] = None
+
+    def __new__(cls, spec: EnvSpec, vision: bool):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False  # type: ignore[attr-defined]
+        return cls._instance
+
     def __init__(self, spec: EnvSpec, vision: bool):
+        if getattr(self, "_initialized", False):
+            if self._spec != spec or self._vision != bool(vision):
+                raise ValueError(
+                    "RealRobotInterfaceMock is a singleton and was already initialized with "
+                    f"spec={self._spec}, vision={self._vision}. "
+                    f"Got spec={spec}, vision={bool(vision)}."
+                )
+            return
+
         self._spec = spec
         self._vision = bool(vision)
 
@@ -238,7 +250,7 @@ class RealRobotInterfaceMock:
                     names=["follow", "left_camera", "front_right_camera"],
                     groups=["/", "/", "/"],
                     roles=["l", "o", "o"],
-                    # ignore_roles=["o"],
+                    ignore_roles=["o"] if not self._vision else [],
                 ),
                 auto_control=AutoControlConfig(groups=[]),
             )
@@ -257,6 +269,7 @@ class RealRobotInterfaceMock:
         """
         self._target_pos = np.array([0.3, 0.0, 0.03]) + np.array([0.0, 0.0, 0.04])
         self._first_get = True
+        self._initialized = True
 
     def _send_action(self, action: np.ndarray, mode: SystemMode) -> None:
         self._action.modes[0] = mode
@@ -265,10 +278,78 @@ class RealRobotInterfaceMock:
         self._action.action_values[0] = action_list
         self._grouped.send_action(self._action)
 
+    def _images_from_obs_data(
+        self,
+        obs_data: Dict[str, Any],
+        *,
+        height: int,
+        width: int,
+        include_raw: bool,
+        debug_dump_first: bool,
+    ) -> Dict[str, np.ndarray]:
+        if not self._vision:
+            return {}
+
+        image_keys = [
+            "/left_camera/color/image_raw",
+            "/front_right_camera/color/image_raw",
+        ]
+        out: Dict[str, np.ndarray] = {}
+        for i in range(self._spec.num_cameras):
+            if i >= len(image_keys):
+                raise ValueError(
+                    "Not enough camera image keys for requested num_cameras. "
+                    f"num_cameras={self._spec.num_cameras} available_keys={len(image_keys)}"
+                )
+            image: np.ndarray = obs_data[image_keys[i]]["data"]
+            clipped = image[:, : image.shape[0]]
+            assert clipped.shape == (480, 480, 3)
+            resized = cv2.resize(clipped, (width, height))
+            out[f"pixels/view_{i}"] = resized[:, :, ::-1].copy()  # BGR -> RGB
+            if include_raw:
+                out[image_keys[i]] = image
+            if debug_dump_first and self._first_get:
+                cv2.imwrite(f"pixels/view_{i}.png", resized)
+        return out
+
+    def get_images(self, *, height: int = 64, width: int = 64) -> Dict[str, np.ndarray]:
+        """Capture camera images as policy-ready tensors.
+
+        Returns a dict with keys like `pixels/view_0` ... `pixels/view_{n-1}`.
+        Arrays are uint8 RGB with shape (height, width, 3).
+        """
+        if not self._vision:
+            return {}
+        obs_data = self._grouped.capture_observation()
+        return self._images_from_obs_data(
+            obs_data,
+            height=height,
+            width=width,
+            include_raw=False,
+            debug_dump_first=False,
+        )
+
     def reset(self, action_abs: np.ndarray) -> None:
         self._ctrl = action_abs
         self._send_action(self._ctrl, SystemMode.RESETTING)
         self._action.modes[0] = SystemMode.SAMPLING
+
+    def get_qpos(self) -> np.ndarray:
+        obs_data = self._grouped.capture_observation()
+        eef_keys = ("/follow/eef/joint_state/position",)
+        for k in eef_keys:
+            value = obs_data[k]["data"][0] / 0.072 * 0.04
+            obs_data[k]["data"] = [value] * 2
+        t, qpos = DataStamped.concatenate(
+            get(
+                [
+                    "/follow/arm/joint_state/position",
+                    "/follow/eef/joint_state/position",
+                ],
+                obs_data,
+            )
+        )
+        return np.array(qpos)
 
     def get_observation(self) -> Dict[str, np.ndarray]:
         # NOTE: For AirbotPlayPickCube (non-vision), this should be a 1D vector whose
@@ -312,20 +393,15 @@ class RealRobotInterfaceMock:
                 (self._spec.privileged_obs_size,), dtype=np.float32
             )
         if self._vision:
-            image_keys = [
-                "/left_camera/color/image_raw",
-                "/front_right_camera/color/image_raw",
-            ]
-            for i in range(self._spec.num_cameras):
-                image: np.ndarray = obs_data[image_keys[i]]["data"]
-                clipped = image[:, : image.shape[0]]
-                assert clipped.shape == (480, 480, 3)
-                resized = cv2.resize(clipped, (64, 64))
-                obs[f"pixels/view_{i}"] = resized[:, :, ::-1].copy()  # BGR to RGB
-                obs[image_keys[i]] = image
-                if self._first_get:
-                    cv2.imwrite(f"pixels/view_{i}.png", resized)
-                # cv2.imshow(f"Camera view {i}", resized)
+            obs.update(
+                self._images_from_obs_data(
+                    obs_data,
+                    height=64,
+                    width=64,
+                    include_raw=True,
+                    debug_dump_first=True,
+                )
+            )
             cv2.waitKey(1)
         if self._first_get:
             self._first_get = False
@@ -345,7 +421,7 @@ class RealRobotInterfaceMock:
         # Replace with: send joint position / cartesian position / gripper cmd.
         # Here we return a mock feedback dict.
         self._ctrl = action
-        print(f"abs action: {action.tolist()}")
+        # print(f"abs action: {action.tolist()}")
         # input("Press Enter to continue...")
         self._send_action(self._ctrl, SystemMode.SAMPLING)
         return {"ok": True, "action_norm": float(np.linalg.norm(action))}
@@ -370,6 +446,12 @@ def _obs_to_tensordict(obs: Dict[str, np.ndarray], device: torch.device) -> Tens
 
 
 def main() -> None:
+    from mujoco_playground import registry  # pylint: disable=wrong-import-position
+    from mujoco_playground.config import locomotion_params  # pylint: disable=wrong-import-position
+    from mujoco_playground.config import manipulation_params  # pylint: disable=wrong-import-position
+    from mujoco_playground._src import wrapper_torch  # pylint: disable=wrong-import-position
+
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--env_name",
