@@ -337,7 +337,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     gripper_mat = data.site_xmat[self._gripper_site].ravel()
     # target_mat = math.quat_to_mat(data.mocap_quat[self._mocap_target])
     obs = jp.concatenate([
-        data.qpos[self._robot_qposadr],
+        # data.qpos[self._robot_qposadr],
         # data.qvel[self._robot_qposadr],
         # gripper_pos,
         # gripper_mat[3:],
