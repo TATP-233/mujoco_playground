@@ -104,8 +104,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         jax.random.uniform(
             rng_box,
             (3,),
-            minval=jp.array([-0.05, -0.1, 0.0]),
-            maxval=jp.array([0.05, 0.1, 0.0]),
+            minval=jp.array([-0.05, -0.05, 0.0]),
+            maxval=jp.array([0.05, 0.05, 0.0]),
         )
         + self._init_obj_pos
     )
@@ -116,8 +116,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         jax.random.uniform(
             rng_target,
             (3,),
-            minval=jp.array([-0.0, -0.1, 0.03]),
-            maxval=jp.array([0.0, 0.1, 0.08]),
+            minval=jp.array([-0.0, -0.05, 0.03]),
+            maxval=jp.array([0.0, 0.05, 0.05]),
         )
         + self._init_obj_pos
     )
@@ -125,6 +125,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
 
     target_quat = jp.array([1.0, 0.0, 0.0, 0.0], dtype=float)
     if self._sample_orientation:
+      raise NotImplementedError()
       # sample a random direction
       rng, rng_axis, rng_theta = jax.random.split(rng, 3)
       perturb_axis = jax.random.uniform(rng_axis, (3,), minval=-1, maxval=1)
@@ -342,7 +343,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
         # gripper_mat[3:],
         info["target_pos"],
         # target_mat.ravel()[:6],
-        data.ctrl - data.qpos[self._robot_qposadr[:-1]],
+        # data.ctrl - data.qpos[self._robot_qposadr[:-1]],
     ])
 
     return obs
