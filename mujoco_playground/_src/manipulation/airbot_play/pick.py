@@ -339,7 +339,7 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     obs = jp.concatenate([
         data.qpos[self._robot_qposadr],
         # data.qvel[self._robot_qposadr],
-        gripper_pos,
+        # gripper_pos,
         # gripper_mat[3:],
         info["target_pos"],
         # target_mat.ravel()[:6],
