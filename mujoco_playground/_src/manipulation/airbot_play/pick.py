@@ -36,7 +36,7 @@ def default_config() -> config_dict.ConfigDict:
   config = config_dict.create(
       ctrl_dt=0.02,
       sim_dt=0.005,
-      episode_length=65,
+      episode_length=150,
       action_repeat=1,
       action_scale=0.02,
       reward_config=config_dict.create(
@@ -223,7 +223,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     out_of_bounds |= box_pos[2] < (state.info["init_box_pos"][2] - 0.01)
     has_non = jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
     done = out_of_bounds | has_non | success
-    done = done.astype(float)
+    # Never terminate the episode.
+    done = jp.array(0.0, dtype=float)
     state.metrics.update({"has_non": has_non})
     state.metrics.update({"reached_box": state.info["reached_box"]})
     state.metrics.update(

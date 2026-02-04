@@ -16,8 +16,10 @@ You are expected to replace the mock robot methods with your real SDK calls.
 from __future__ import annotations
 
 import argparse
+import atexit
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -269,6 +271,19 @@ class RealRobotInterfaceMock:
         """
         self._target_pos = np.array([0.3, 0.0, 0.03]) + np.array([0.0, 0.0, 0.04])
         self._first_get = True
+
+        self._record_raw_video = bool(self._vision)
+        self._raw_video_fps = 30.0
+        self._raw_video_dir: Optional[Path] = None
+        self._raw_video_writers: Dict[int, cv2.VideoWriter] = {}
+        self._raw_video_disabled = False
+
+        if self._record_raw_video:
+            ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+            self._raw_video_dir = Path("replayed_videos") / "real_robot_raw" / ts
+            self._raw_video_dir.mkdir(parents=True, exist_ok=True)
+            atexit.register(self.close)
+
         self._initialized = True
 
     def _send_action(self, action: np.ndarray, mode: SystemMode) -> None:
@@ -302,15 +317,61 @@ class RealRobotInterfaceMock:
                     f"num_cameras={self._spec.num_cameras} available_keys={len(image_keys)}"
                 )
             image: np.ndarray = obs_data[image_keys[i]]["data"]
+
+            if include_raw:
+                out[image_keys[i]] = image
+                if self._record_raw_video and (not self._raw_video_disabled):
+                    self._write_raw_video_frame(i, image)
+
             clipped = image[:, : image.shape[0]]
             assert clipped.shape == (480, 480, 3)
             resized = cv2.resize(clipped, (width, height))
             out[f"pixels/view_{i}"] = resized[:, :, ::-1].copy()  # BGR -> RGB
-            if include_raw:
-                out[image_keys[i]] = image
             if debug_dump_first and self._first_get:
                 cv2.imwrite(f"pixels/view_{i}.png", resized)
         return out
+
+    def _write_raw_video_frame(self, camera_index: int, frame_bgr: np.ndarray) -> None:
+        if self._raw_video_dir is None:
+            return
+        if frame_bgr.ndim != 3 or frame_bgr.shape[2] != 3:
+            raise ValueError(
+                f"Expected raw frame shape (H, W, 3), got {frame_bgr.shape}"
+            )
+
+        frame_bgr = np.ascontiguousarray(frame_bgr)
+        h, w = int(frame_bgr.shape[0]), int(frame_bgr.shape[1])
+
+        writer = self._raw_video_writers.get(camera_index)
+        if writer is None:
+            out_path = self._raw_video_dir / f"camera_{camera_index}.mp4"
+            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            writer = cv2.VideoWriter(out_path.as_posix(), fourcc, self._raw_video_fps, (w, h))
+            if not writer.isOpened():
+                # Fallback to AVI for environments without mp4v support.
+                out_path = self._raw_video_dir / f"camera_{camera_index}.avi"
+                fourcc = cv2.VideoWriter_fourcc(*"XVID")
+                writer = cv2.VideoWriter(out_path.as_posix(), fourcc, self._raw_video_fps, (w, h))
+
+            if not writer.isOpened():
+                self._raw_video_disabled = True
+                print(
+                    "[warn] Failed to open cv2.VideoWriter; raw video recording disabled. "
+                    f"dir={self._raw_video_dir}"
+                )
+                return
+
+            self._raw_video_writers[camera_index] = writer
+
+        writer.write(frame_bgr)
+
+    def close(self) -> None:
+        for writer in self._raw_video_writers.values():
+            try:
+                writer.release()
+            except Exception:
+                pass
+        self._raw_video_writers.clear()
 
     def get_images(self, *, height: int = 64, width: int = 64) -> Dict[str, np.ndarray]:
         """Capture camera images as policy-ready tensors.
@@ -325,7 +386,7 @@ class RealRobotInterfaceMock:
             obs_data,
             height=height,
             width=width,
-            include_raw=False,
+            include_raw=True,
             debug_dump_first=False,
         )
 
