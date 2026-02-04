@@ -49,7 +49,7 @@ class ActorCriticCNN(ActorCritic):
       num_actions: int,
       **kwargs,
   ) -> None:
-    self.cnn_output_size = 256
+    self.cnn_output_size = 64
     
     # Create a dummy observation with 1D features for the base class initialization
     dummy_obs_dict = {}
