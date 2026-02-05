@@ -1,0 +1,32 @@
+% Auto-generated reward table for AirbotPlayPickCube (see mujoco_playground/_src/manipulation/airbot_play/pick.py).
+% Requires: \usepackage{booktabs} and \usepackage{amsmath,amssymb}
+
+\begin{table}[t]
+	\centering
+	\caption{Reward Functions}
+	\label{tab:pick_rewards}
+	\begin{tabular}{@{}l l@{}}
+		\toprule
+		\textbf{Reward} & \textbf{Expression} \\
+		\midrule
+		Gripper--Box Proximity & $r_{\mathrm{gb}} = k_{\mathrm{gb}}\,\Big(1 - \tanh\!\big(5\,\lVert \mathbf{p}_{\mathrm{box}} - \mathbf{p}_{\mathrm{grip}} \rVert\big)\Big)$ \\
+		Box--Target Tracking & $r_{\mathrm{bt}} = k_{\mathrm{bt}}\,\Big(1 - \tanh\!\big(5\,\lVert \mathbf{p}_{\mathrm{tgt}} - \mathbf{p}_{\mathrm{box}} \rVert\big)\Big)\,\mathbb{I}_{\mathrm{reach}}$ \\
+		No Floor Collision & $r_{\mathrm{nfc}} = k_{\mathrm{nfc}}\,\big(1 - \mathbb{I}_{\mathrm{floor}}\big)$ \\
+		No Box Collision & $r_{\mathrm{nbc}} = k_{\mathrm{nbc}}\,\big(1 - \mathbb{I}_{\mathrm{hand\text{-}box}}\big)$ \\
+		Gripper Closing (after reach) & $r_{\mathrm{gc}} = k_{\mathrm{gc}}\,\Big(1 - \frac{\lvert u_g - u_{\min} \rvert}{u_{\max}-u_{\min}}\Big)\,\mathbb{I}_{\mathrm{reach}}$ \\
+		Lifted (sparse) & $r_{\mathrm{lift}} = k_{\mathrm{lift}}\,\mathbb{I}\big(p^{z}_{\mathrm{box}} > p^{z}_{\mathrm{box,0}} + 0.005\big)\,\mathbb{I}_{\mathrm{reach}}$ \\
+		Success (sparse) & $r_{\mathrm{succ}} = k_{\mathrm{succ}}\,\mathbb{I}\big(\lVert \mathbf{p}_{\mathrm{box}} - \mathbf{p}_{\mathrm{tgt}} \rVert < \epsilon\big)$ \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\noindent\textbf{Notation.}
+$\mathbf{p}_{\mathrm{box}}$ is the box position, $\mathbf{p}_{\mathrm{tgt}}$ is the target (mocap) position, and $\mathbf{p}_{\mathrm{grip}}$ is the gripper site position.
+$p^{z}_{\mathrm{box}}$ and $p^{z}_{\mathrm{box,0}}$ denote the current and initial box height, respectively.
+$u_g$ is the gripper control command (last control dimension), with limits $u_{\min}$ and $u_{\max}$.
+$\mathbb{I}(\cdot)$ is the indicator function.
+$\mathbb{I}_{\mathrm{reach}} = \mathbb{I}(\lVert \mathbf{p}_{\mathrm{box}} - \mathbf{p}_{\mathrm{grip}} \rVert < 0.015)$ gates rewards that should only activate after the gripper reaches the box.
+$\mathbb{I}_{\mathrm{floor}}$ and $\mathbb{I}_{\mathrm{hand\text{-}box}}$ indicate floor contact and hand--box collision as detected by contact sensors.
+$\epsilon$ is the success threshold (set to $0.01$ in our experiments).
+We use $(k_{\mathrm{gb}}, k_{\mathrm{bt}}, k_{\mathrm{nfc}}, k_{\mathrm{nbc}}, k_{\mathrm{gc}}, k_{\mathrm{lift}}, k_{\mathrm{succ}}) = (5.0, 5.0, 0.25, 0.5, 20.0, 8.0, 10.0)$; the sparse bonuses $r_{\mathrm{lift}}$ and $r_{\mathrm{succ}}$ are applied in the vision setting.
+The episode reward is computed as $\mathrm{clip}(\sum_i r_i, -10^4, 10^4)

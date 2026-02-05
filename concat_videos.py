@@ -2,6 +2,7 @@ import argparse
 import math
 import shutil
 import subprocess
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -333,6 +334,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         raise ValueError(
             f"Need at least {need} folders for N={args.n}, but only {len(keys)} entries in video_slices"
         )
+    random.shuffle(selected)
 
     base = Path(__file__).resolve().parent
     root = (base / video_dir).resolve()

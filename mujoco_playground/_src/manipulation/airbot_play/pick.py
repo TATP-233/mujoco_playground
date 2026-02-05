@@ -107,16 +107,16 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     rng, rng_box, rng_target = jax.random.split(rng, 3)
 
     # intialize box position
-    # box_pos = (
-    #     jax.random.uniform(
-    #         rng_box,
-    #         (3,),
-    #         minval=jp.array([-0.05, -0.1, 0.0]),
-    #         maxval=jp.array([0.05, 0.1, 0.0]),
-    #     )
-    #     + self._init_obj_pos
-    # )
-    box_pos = self._init_obj_pos
+    box_pos = (
+        jax.random.uniform(
+            rng_box,
+            (3,),
+            minval=jp.array([-0.05, -0.1, 0.0]),
+            maxval=jp.array([0.05, 0.1, 0.0]),
+        )
+        + self._init_obj_pos
+    )
+    # box_pos = self._init_obj_pos
     # print(f"init box pos={box_pos}")
     # initialize target position
     target_pos = (
@@ -223,8 +223,8 @@ class AirbotPlayPickCube(airbot_play.AirbotPlayBase):
     out_of_bounds |= box_pos[2] < (state.info["init_box_pos"][2] - 0.01)
     has_non = jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
     done = out_of_bounds | has_non | success
-    # Never terminate the episode.
-    done = jp.array(0.0, dtype=float)
+    # # Never terminate the episode.
+    # done = jp.array(0.0, dtype=float)
     state.metrics.update({"has_non": has_non})
     state.metrics.update({"reached_box": state.info["reached_box"]})
     state.metrics.update(
