@@ -273,6 +273,13 @@ def main(argv):
 
   if _VISION.value:
     train_cfg.policy.class_name = "rsl_rl.modules.ActorCriticCNN"
+
+    # Best practice: keep action std valid.
+    # - For fresh runs, prefer log-std parameterization (prevents negative std by construction).
+    # - Always clamp std with a small floor inside ActorCriticCNN.
+    if _LOAD_RUN_NAME.value is None:
+      train_cfg.policy.noise_std_type = "log"
+    train_cfg.policy.min_std = 1e-6
     
     num_cameras = raw_env.mj_model.ncam
     pixel_views = [f"pixels/view_{i}" for i in range(num_cameras)]

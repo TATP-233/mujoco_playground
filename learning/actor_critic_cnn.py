@@ -17,6 +17,8 @@
 import torch
 import torch.nn as nn
 from tensordict import TensorDict
+from torch.distributions import Normal
+
 from rsl_rl.modules import ActorCritic
 
 
@@ -49,7 +51,8 @@ class ActorCriticCNN(ActorCritic):
       num_actions: int,
       **kwargs,
   ) -> None:
-    self.cnn_output_size = 64
+    self.cnn_output_size = 16
+    self._min_std = float(kwargs.pop("min_std", 1e-6))
     
     # Create a dummy observation with 1D features for the base class initialization
     dummy_obs_dict = {}
@@ -76,6 +79,11 @@ class ActorCriticCNN(ActorCritic):
     
     self.encoder = CNNEncoder(output_size=self.cnn_output_size) if has_pixels_policy else None
     self.critic_encoder = CNNEncoder(output_size=self.cnn_output_size) if has_pixels_critic else None
+
+  def _update_distribution(self, obs: TensorDict) -> None:
+    super()._update_distribution(obs)
+    scale = torch.clamp(self.distribution.scale, min=self._min_std)
+    self.distribution = Normal(self.distribution.loc, scale)
 
   def _process_obs_list(self, obs: TensorDict, group_names: list[str], encoder: nn.Module = None) -> torch.Tensor:
     obs_list = []
