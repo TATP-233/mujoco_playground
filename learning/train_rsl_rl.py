@@ -304,6 +304,10 @@ def main(argv):
 
   train_cfg_dict = train_cfg.to_dict()
   runner = OnPolicyRunner(brax_env, train_cfg_dict, logdir, device=device)
+  try:
+    print(f"Resolved policy class: {runner.alg.policy.__class__.__module__}.{runner.alg.policy.__class__.__name__}")
+  except Exception as e:  # pylint: disable=broad-exception-caught
+    print(f"Failed to print resolved policy class: {e}")
 
   # If resume, load from checkpoint
   if train_cfg.resume:

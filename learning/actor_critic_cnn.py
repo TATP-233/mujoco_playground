@@ -82,7 +82,11 @@ class ActorCriticCNN(ActorCritic):
 
   def _update_distribution(self, obs: TensorDict) -> None:
     super()._update_distribution(obs)
-    scale = torch.clamp(self.distribution.scale, min=self._min_std)
+    scale = self.distribution.scale
+    # torch.normal requires std to be finite and >= 0.
+    # nan_to_num keeps training alive in rare numeric blow-ups.
+    scale = torch.nan_to_num(scale, nan=self._min_std, posinf=1.0, neginf=self._min_std)
+    scale = torch.clamp(scale, min=self._min_std)
     self.distribution = Normal(self.distribution.loc, scale)
 
   def _process_obs_list(self, obs: TensorDict, group_names: list[str], encoder: nn.Module = None) -> torch.Tensor:
