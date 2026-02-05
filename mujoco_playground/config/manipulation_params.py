@@ -253,11 +253,11 @@ def brax_vision_ppo_config(
   return rl_config
 
 
-def rsl_rl_config(env_name: str, unused_impl: Optional[str] = None) -> config_dict.ConfigDict:  # pylint: disable=unused-argument
+def rsl_rl_config(env_name: str, unused_impl: Optional[str] = None, seed = 1) -> config_dict.ConfigDict:  # pylint: disable=unused-argument
   """Returns tuned RSL-RL PPO config for the given environment."""
 
   rl_config = config_dict.create(
-      seed=1,
+      seed=seed,
       runner_class_name="OnPolicyRunner",
       policy=config_dict.create(
           init_noise_std=1.0,

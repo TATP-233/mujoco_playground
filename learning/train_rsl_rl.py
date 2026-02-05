@@ -102,9 +102,9 @@ _WP_KERNEL_CACHE_DIR = flags.DEFINE_string(
 _VISION = flags.DEFINE_boolean("vision", False, "Use vision input.")
 _USE_DR = flags.DEFINE_boolean("use_dr", False, "Use domain randomization.")
 
-def get_rl_config(env_name: str) -> config_dict.ConfigDict:
+def get_rl_config(env_name: str, seed: int) -> config_dict.ConfigDict:
   if env_name in registry.manipulation._envs:
-    return manipulation_params.rsl_rl_config(env_name)
+    return manipulation_params.rsl_rl_config(env_name, seed=seed)
   elif env_name in registry.locomotion._envs:
     return locomotion_params.rsl_rl_config(env_name)
   else:
@@ -269,7 +269,7 @@ def main(argv):
     )
 
   # Build RSL-RL config
-  train_cfg = get_rl_config(_ENV_NAME.value)
+  train_cfg = get_rl_config(_ENV_NAME.value, _SEED.value)
 
   if _VISION.value:
     train_cfg.policy.class_name = "rsl_rl.modules.ActorCriticCNN"
